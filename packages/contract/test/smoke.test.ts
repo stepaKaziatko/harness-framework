@@ -12,8 +12,10 @@ const ENTRY_VALUES = [
   "defineContract",
   "defineDeclarationKind",
   "defineExtension",
+  "defineSource",
   "diagnosticCodes",
   "normalize",
+  "sourceKind",
 ];
 
 const manifest = JSON.parse(
@@ -68,14 +70,18 @@ describe("@paddockjs/contract", () => {
     expect(new Set(zodImports)).toEqual(new Set(["zod/v4/core"]));
   });
 
-  it("holds only the core and the entry point, with no concrete kinds (T14)", () => {
+  it("holds the core, the kinds, versioning and the entry point, and the core knows no kind (T14)", () => {
     const files = sourceFiles().map((file) =>
       relative(sourceRoot, file).split("\\").join("/"),
     );
     expect(
-      files.filter((file) => file !== "index.ts" && !file.startsWith("core/")),
+      files.filter(
+        (file) =>
+          file !== "index.ts" &&
+          !/^(core\/|kinds\/[^/]+\/|versioning\/)/.test(file),
+      ),
     ).toEqual([]);
-    const mentions = sourceFiles().filter((file) =>
+    const mentions = sourceFiles(join(sourceRoot, "core")).filter((file) =>
       /"(source|intent|widget|slot)"/.test(readFileSync(file, "utf8")),
     );
     expect(mentions).toEqual([]);
