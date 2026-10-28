@@ -1,11 +1,24 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
   defineContract,
+  defineDeclarationKind,
+  defineExtension,
   diagnosticCodes,
   normalize,
+  type ChangeTable,
   type CoreDiagnosticCode,
+  type Declaration,
+  type DeclarationContext,
+  type DiagnosticCatalog,
   type DiagnosticPath,
+  type JsonValue,
 } from "../src/index.js";
+import {
+  createProbeKind,
+  defineProbe,
+  type ProbeInput,
+} from "./support/test-kind.js";
 
 const RESERVED_AREAS = [
   "root",
@@ -28,23 +41,46 @@ function root(fields: Record<string, unknown> = {}): unknown {
   } as never);
 }
 
+/** A kind whose `normalize` does what the test needs. */
+function kind(
+  normalize: (declaration: Declaration, context: DeclarationContext) => unknown,
+  options: { kind?: string; changes?: unknown; diagnostics?: unknown } = {},
+) {
+  return defineDeclarationKind({
+    kind: options.kind ?? "rogue",
+    normalize: normalize as (
+      declaration: Declaration,
+      context: DeclarationContext,
+    ) => JsonValue,
+    changes: (options.changes ?? { fields: {} }) as ChangeTable,
+    diagnostics: (options.diagnostics ?? {}) as DiagnosticCatalog,
+  });
+}
+
 interface Case {
   readonly title: string;
   readonly input: () => unknown;
   readonly path: DiagnosticPath;
 }
 
+const longName = `${"a".repeat(30)}.${"b".repeat(30)}`; // "trading." + 61 = 69 > 64
+
 /**
  * One or more minimal inputs per core code. Each gives exactly one diagnostic:
- * that code, at that path.
+ * that code, at that path. The type makes the table cover the whole catalog.
  */
-const cases: Partial<Record<CoreDiagnosticCode, readonly Case[]>> = {
+const cases: Record<CoreDiagnosticCode, readonly Case[]> = {
   "root.invalid-shape": [
     { title: "null input", input: () => null, path: [] },
     {
       title: "imports not an array",
       input: () => root({ imports: "auth" }),
       path: ["imports"],
+    },
+    {
+      title: "extension entry without a descriptor",
+      input: () => root({ extensions: [{ id: "layout" }] }),
+      path: ["extensions", 0],
     },
   ],
   "root.unknown-field": [
@@ -119,13 +155,42 @@ const cases: Partial<Record<CoreDiagnosticCode, readonly Case[]>> = {
     },
   ],
   "name.invalid": [
+    ...["Quotes", "quotes_feed", "a-1", "a..b", "a.b.c.d", "", longName].map(
+      (name) => ({
+        title: `declaration name ${JSON.stringify(name)}`,
+        input: () => root({ declarations: [defineProbe({ name })] }),
+        path: ["declarations", 0, "name"],
+      }),
+    ),
     {
       title: "permission name",
       input: () => root({ permissions: { "Orders.place": {} } }),
       path: ["permissions", "Orders.place"],
     },
   ],
+  "name.duplicate": [
+    {
+      title: "two declarations with one name",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({ name: "quotes.feed" }),
+            defineProbe({ name: "quotes.feed" }),
+          ],
+        }),
+      path: ["declarations", 1, "name"],
+    },
+  ],
   "name.import-conflict": [
+    {
+      title: "declaration under an import name",
+      input: () =>
+        root({
+          imports: [{ contract: "auth", range: "^1.0.0" }],
+          declarations: [defineProbe({ name: "auth.users" })],
+        }),
+      path: ["declarations", 0, "name"],
+    },
     {
       title: "permission under an import name",
       input: () =>
@@ -134,6 +199,78 @@ const cases: Partial<Record<CoreDiagnosticCode, readonly Case[]>> = {
           permissions: { "auth.read": {} },
         }),
       path: ["permissions", "auth.read"],
+    },
+  ],
+  "reference.invalid": [
+    {
+      title: "not a path",
+      input: () =>
+        root({
+          declarations: [defineProbe({ name: "a", refs: ["Not A Path"] })],
+        }),
+      path: ["declarations", 0, "refs", 0],
+    },
+    {
+      title: "an import without a path",
+      input: () =>
+        root({
+          imports: [{ contract: "auth", range: "^1.0.0" }],
+          declarations: [defineProbe({ name: "a", refs: ["auth"] })],
+        }),
+      path: ["declarations", 0, "refs", 0],
+    },
+  ],
+  "reference.unknown": [
+    {
+      title: "missing local name",
+      input: () =>
+        root({ declarations: [defineProbe({ name: "a", refs: ["missing"] })] }),
+      path: ["declarations", 0, "refs", 0],
+    },
+    {
+      title: "qualified own name is not a reference",
+      input: () =>
+        root({
+          declarations: [defineProbe({ name: "a", refs: ["trading.a"] })],
+        }),
+      path: ["declarations", 0, "refs", 0],
+    },
+  ],
+  "reference.kind-mismatch": [
+    {
+      title: "probe referenced as another kind",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({ name: "a", refs: [{ ref: "b", kind: "source" }] }),
+            defineProbe({ name: "b" }),
+          ],
+        }),
+      path: ["declarations", 0, "refs", 0],
+    },
+  ],
+  "permission.unknown": [
+    {
+      title: "undeclared permission",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({ name: "a", requires: ["orders.place"] }),
+          ],
+        }),
+      path: ["declarations", 0, "requires", 0],
+    },
+    {
+      title: "permission of an import",
+      input: () =>
+        root({
+          imports: [{ contract: "auth", range: "^1.0.0" }],
+          permissions: { read: {} },
+          declarations: [
+            defineProbe({ name: "a", requires: ["read", "auth.read"] }),
+          ],
+        }),
+      path: ["declarations", 0, "requires", 1],
     },
   ],
   "permission.unknown-subject": [
@@ -160,9 +297,55 @@ const cases: Partial<Record<CoreDiagnosticCode, readonly Case[]>> = {
       path: ["declarations", 0],
     },
     {
+      title: "name is not a string",
+      input: () =>
+        root({
+          declarations: [defineProbe({ name: 42 } as unknown as ProbeInput)],
+        }),
+      path: ["declarations", 0],
+    },
+    {
+      title: "requires is not an array of strings",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({
+              name: "a",
+              requires: "read",
+            } as unknown as ProbeInput),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+    {
+      title: "description is not a string",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({ name: "a", description: 1 } as unknown as ProbeInput),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+    {
       title: "not an object",
       input: () => root({ declarations: ["quotes.feed"] }),
       path: ["declarations", 0],
+    },
+  ],
+  "declaration.invalid-stability": [
+    {
+      title: "stable",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({
+              name: "a",
+              stability: "stable",
+            } as unknown as ProbeInput),
+          ],
+        }),
+      path: ["declarations", 0, "stability"],
     },
   ],
   "declaration.unknown-kind": [
@@ -170,6 +353,134 @@ const cases: Partial<Record<CoreDiagnosticCode, readonly Case[]>> = {
       title: "plain object with an envelope",
       input: () => root({ declarations: [{ kind: "probe", name: "a" }] }),
       path: ["declarations", 0],
+    },
+  ],
+  "descriptor.conflict": [
+    {
+      title: "two kinds named probe",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({ name: "a" }),
+            createProbeKind().declare({ name: "b" }),
+          ],
+        }),
+      path: ["declarations", 1],
+    },
+    {
+      title: "a kind and an extension with one id",
+      input: () =>
+        root({
+          declarations: [defineProbe({ name: "a" })],
+          extensions: [
+            defineExtension({
+              id: "probe",
+              names: () => [],
+              normalize: () => ({}),
+              changes: { fields: {} },
+              diagnostics: {},
+            }).declare({}),
+          ],
+        }),
+      path: ["extensions", 0],
+    },
+  ],
+  "descriptor.reserved-id": [
+    {
+      title: "kind named permission",
+      input: () =>
+        root({
+          declarations: [
+            kind(() => ({}), { kind: "permission" }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+    {
+      title: "kind that is not a segment",
+      input: () =>
+        root({
+          declarations: [
+            kind(() => ({}), { kind: "Source" }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+  ],
+  "descriptor.invalid-changes": [
+    {
+      title: "rule outside the set",
+      input: () =>
+        root({
+          declarations: [
+            kind(() => ({}), {
+              changes: { fields: { a: { rule: "sometimes" } } },
+            }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+  ],
+  "descriptor.undeclared-code": [
+    {
+      title: "code of another area",
+      input: () =>
+        root({
+          declarations: [
+            kind((_declaration, context) => {
+              context.report("probe.unusual", [], "not mine");
+              return {};
+            }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+  ],
+  "descriptor.non-json-output": [
+    {
+      title: "function in the output",
+      input: () =>
+        root({
+          declarations: [kind(() => ({ run: () => 1 })).declare({ name: "a" })],
+        }),
+      path: ["declarations", 0],
+    },
+  ],
+  "descriptor.failed": [
+    {
+      title: "normalize throws",
+      input: () =>
+        root({
+          declarations: [
+            kind(() => {
+              throw new Error("boom");
+            }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+  ],
+  "schema.invalid": [
+    {
+      title: "not a zod schema",
+      input: () =>
+        root({
+          declarations: [
+            defineProbe({
+              name: "a",
+              input: { type: "string" } as unknown as z.ZodString,
+            }),
+          ],
+        }),
+      path: ["declarations", 0, "input"],
+    },
+  ],
+  "schema.unrepresentable": [
+    {
+      title: "z.date()",
+      input: () =>
+        root({ declarations: [defineProbe({ name: "a", output: z.date() })] }),
+      path: ["declarations", 0, "output"],
     },
   ],
 };
@@ -232,15 +543,18 @@ describe("collecting diagnostics", () => {
         version: "1.0",
         imports: [{ contract: "auth", range: "^1.x" }],
         permissions: { read: { subjects: [] } },
-        declarations: [{ kind: "x", name: "Bad" }],
+        declarations: [
+          defineProbe({ name: "Bad" }),
+          defineProbe({ name: "ok", requires: ["write"] }),
+        ],
       }),
     );
     expect(result.diagnostics.map((item) => [item.code, item.path])).toEqual([
       ["contract.invalid-version", ["version"]],
       ["import.invalid-range", ["imports", 0, "range"]],
       ["permission.empty-subjects", ["permissions", "read", "subjects"]],
-      ["declaration.unknown-kind", ["declarations", 0]],
       ["name.invalid", ["declarations", 0, "name"]],
+      ["permission.unknown", ["declarations", 1, "requires", 0]],
     ]);
   });
 });

@@ -1,5 +1,9 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { defineContract, normalize } from "../src/index.js";
+import { coreRoot, coreRootInput } from "./fixtures/core-root.js";
+import { defineProbe } from "./support/test-kind.js";
+import { defineLayout } from "./support/test-extension.js";
 
 /** A copy of plain objects and arrays; other values are kept by reference. */
 function snapshot(value: unknown): unknown {
@@ -32,21 +36,12 @@ function frozenPlainValues(value: unknown, path = "$"): string[] {
   );
 }
 
-const rootInput = {
-  name: "trading",
-  version: "0.1.0",
-  imports: [{ contract: "auth", range: "^1.4.0" }],
-  permissions: {
-    "quotes.read": { description: "Read market quotes" },
-    "orders.place": { subjects: [{ kind: "end-user" }] },
-  },
-} as const;
-
 describe("defineContract", () => {
   it("returns a deeply frozen root (T5)", () => {
-    const root = defineContract(rootInput);
-    expect(Object.isFrozen(root)).toBe(true);
-    expect(frozenPlainValues(root)).toEqual([]);
+    expect(Object.isFrozen(coreRoot)).toBe(true);
+    expect(frozenPlainValues(coreRoot)).toEqual([]);
+    expect(Object.isFrozen(coreRoot.permissions["quotes.read"])).toBe(true);
+    expect(Object.isFrozen(coreRoot.declarations[0])).toBe(true);
   });
 
   it("does not freeze or change its input", () => {
@@ -75,25 +70,39 @@ describe("defineContract", () => {
 describe("normalize", () => {
   it("does not change its input (T5)", () => {
     const input = {
-      ...rootInput,
-      imports: [...rootInput.imports],
-      permissions: { ...rootInput.permissions },
+      ...coreRootInput,
+      permissions: { ...coreRootInput.permissions },
+      declarations: [...coreRootInput.declarations],
+      extensions: [
+        defineLayout({
+          panels: [{ name: "quotes.panel", source: "quotes.feed" }],
+        }),
+      ],
     };
     const before = snapshot(input);
-    expect(normalize(input).ok).toBe(true);
+    const result = normalize(input);
+    expect(result.ok).toBe(true);
     expect(input).toEqual(before);
+    expect(normalize(coreRoot).ok).toBe(true);
   });
 
-  it("materializes the default subject of a permission (T3)", () => {
+  it("materializes defaults (T3)", () => {
     const result = normalize(
       defineContract({
         name: "defaults",
         version: "1.0.0",
         permissions: { read: {} },
+        declarations: [defineProbe({ name: "plain" })],
       }),
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.model.declarations["defaults.plain"]).toStrictEqual({
+      kind: "probe",
+      requires: [],
+      spec: { level: "low", refs: [], tags: [] },
+      stability: "internal",
+    });
     expect(result.model.permissions["defaults.read"]).toStrictEqual({
       subjects: [{ kind: "end-user" }],
     });
@@ -132,6 +141,7 @@ describe("normalize", () => {
       imports: {},
       permissions: [],
       declarations: "x",
+      extensions: 5,
     });
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((item) => [item.code, item.path])).toEqual([
@@ -140,6 +150,7 @@ describe("normalize", () => {
       ["root.invalid-shape", ["imports"]],
       ["root.invalid-shape", ["permissions"]],
       ["root.invalid-shape", ["declarations"]],
+      ["root.invalid-shape", ["extensions"]],
     ]);
   });
 
@@ -189,5 +200,17 @@ describe("normalize", () => {
     const result = normalize(hostile);
     expect(result.ok).toBe(false);
     expect(result.diagnostics.at(-1)?.code).toBe("root.invalid-shape");
+  });
+
+  it("accepts zod schemas inside a frozen root", () => {
+    const root = defineContract({
+      name: "schemas",
+      version: "1.0.0",
+      declarations: [
+        defineProbe({ name: "x", input: z.object({ a: z.string() }) }),
+      ],
+    });
+    expect(normalize(root).ok).toBe(true);
+    expect(normalize(root).ok).toBe(true);
   });
 });

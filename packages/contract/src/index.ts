@@ -14,11 +14,21 @@ export type {
   SetRule,
 } from "./core/changes.js";
 
+export { defineDeclarationKind, defineExtension } from "./core/descriptor.js";
 export type {
   Declaration,
+  DeclarationContext,
   DeclarationEnvelope,
+  DeclarationKind,
+  DeclarationKindOptions,
+  Extension,
+  ExtensionContext,
+  ExtensionName,
+  ExtensionOptions,
   ExtensionSection,
   ModelDeclaration,
+  NormalizeContext,
+  ResolveOptions,
   Stability,
 } from "./core/descriptor.js";
 

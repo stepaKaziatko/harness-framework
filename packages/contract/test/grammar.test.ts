@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { defineContract, normalize } from "../src/index.js";
 import { isLocalName, isPath, isSegment } from "../src/core/names.js";
 import { isContractVersion, isImportRange } from "../src/core/semver.js";
+import { defineProbe } from "./support/test-kind.js";
 
 describe("name segments", () => {
   it.each(["a", "quotes", "quotes-feed", "v2", "a1-b2", "x".repeat(32)])(
@@ -95,4 +97,46 @@ describe("import ranges", () => {
     "1.0.0 - 2.0.0",
     "",
   ])("refuses %j", (range) => expect(isImportRange(range)).toBe(false));
+});
+
+describe("valid forms pass normalize without diagnostics (T7)", () => {
+  it.each(["0.1.0", "1.0.0-rc.1"])("version %s", (version) => {
+    expect(
+      normalize(defineContract({ name: "trading", version })),
+    ).toMatchObject({ ok: true, diagnostics: [] });
+  });
+
+  it.each(["1.2.3", "^1.2.3", "~1.2.3", ">=1.2.3 <2.0.0", "^1.0.0 || ^2.0.0"])(
+    "range %s",
+    (range) => {
+      const root = defineContract({
+        name: "trading",
+        version: "1.0.0",
+        imports: [{ contract: "auth", range }],
+      });
+      expect(normalize(root)).toMatchObject({ ok: true, diagnostics: [] });
+    },
+  );
+
+  it.each(["a", "quotes-feed", "a.b.c", "x".repeat(32)])("name %s", (name) => {
+    const root = defineContract({
+      name: "trading",
+      version: "1.0.0",
+      permissions: { [name]: {} },
+      declarations: [defineProbe({ name })],
+    });
+    expect(normalize(root)).toMatchObject({ ok: true, diagnostics: [] });
+  });
+
+  it("keeps declarations and permissions in separate namespaces", () => {
+    const root = defineContract({
+      name: "trading",
+      version: "1.0.0",
+      permissions: { "orders.place": {} },
+      declarations: [
+        defineProbe({ name: "orders.place", requires: ["orders.place"] }),
+      ],
+    });
+    expect(normalize(root)).toMatchObject({ ok: true, diagnostics: [] });
+  });
 });

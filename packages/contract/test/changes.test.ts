@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { coreChangeTable } from "../src/index.js";
+import { coreChangeTable, defineContract, normalize } from "../src/index.js";
 import { isTable } from "../src/core/changes.js";
+import { probeChanges, defineProbe } from "./support/test-kind.js";
 
 describe("coreChangeTable (T15)", () => {
   it("holds exactly the rows of the core", () => {
@@ -69,6 +70,37 @@ describe("coreChangeTable (T15)", () => {
     expect(JSON.parse(JSON.stringify(coreChangeTable))).toStrictEqual(
       coreChangeTable,
     );
+  });
+
+  it("lets the test kind use every rule of the closed set and accepts it", () => {
+    const rules = new Set<string>();
+    const walk = (table: typeof probeChanges): void => {
+      for (const rule of Object.values(table.fields)) {
+        rules.add(
+          rule.rule === "schema" ? `schema:${rule.direction}` : rule.rule,
+        );
+        if (rule.rule === "nested" && rule.table !== "kind") walk(rule.table);
+      }
+    };
+    walk(probeChanges);
+    expect([...rules].sort()).toEqual([
+      "breaking",
+      "compatible",
+      "nested",
+      "ordered",
+      "schema:input",
+      "schema:output",
+      "set",
+    ]);
+    expect(isTable(probeChanges)).toBe(true);
+    const result = normalize(
+      defineContract({
+        name: "t",
+        version: "1.0.0",
+        declarations: [defineProbe({ name: "a" })],
+      }),
+    );
+    expect(result).toMatchObject({ ok: true, diagnostics: [] });
   });
 });
 

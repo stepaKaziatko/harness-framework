@@ -1,8 +1,34 @@
 // The working state of one `normalize` call, shared by its phases.
 
+import type {
+  DeclarationKind,
+  Extension,
+  ModelDeclaration,
+  Stability,
+} from "./descriptor.js";
 import { DiagnosticCollector, type DiagnosticPath } from "./diagnostics.js";
+import type { JsonValue } from "./json.js";
 import type { ModelImport, ModelPermission } from "./model.js";
 import { firstSegment, isLocalName, isPath, qualify } from "./names.js";
+
+/** A declaration that passed phase 2 and goes to its kind in phase 3. */
+export interface DeclarationEntry {
+  readonly index: number;
+  readonly value: Record<string | symbol, unknown>;
+  readonly descriptor: DeclarationKind;
+  readonly name: string;
+  readonly stability: Stability;
+  readonly requires: readonly string[];
+  readonly description?: string;
+}
+
+/** An extension section that passed phase 2 and goes to phase 4. */
+export interface ExtensionEntry {
+  readonly index: number;
+  readonly value: Record<string | symbol, unknown>;
+  readonly descriptor: Extension;
+  readonly id: string;
+}
 
 /** An entry of the shared namespace of declarations and extension names. */
 export interface NamespaceEntry {
@@ -22,8 +48,18 @@ export class NormalizeState {
   readonly permissionNames = new Set<string>();
   /** Valid permissions by qualified name. */
   readonly permissions = new Map<string, ModelPermission>();
+  readonly declarations: DeclarationEntry[] = [];
+  readonly extensions: ExtensionEntry[] = [];
   /** The shared namespace, by qualified name (or local name if the contract name is invalid). */
   readonly namespace = new Map<string, NamespaceEntry>();
+  /** First descriptor seen for each kind or extension id. */
+  readonly descriptorsById = new Map<string, object>();
+  /** Descriptors already checked, with the outcome. */
+  readonly checkedDescriptors = new Map<object, boolean>();
+  /** Normalized declarations by qualified name, filled in phase 3. */
+  readonly modelDeclarations: Record<string, ModelDeclaration> = {};
+  /** Normalized extension sections by id, filled in phase 4. */
+  readonly modelExtensions: Record<string, JsonValue> = {};
 
   /** The key of a local name in the namespace and in the model. */
   qualify(local: string): string {

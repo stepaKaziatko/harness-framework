@@ -1,9 +1,11 @@
 // `normalize`: checks a contract root and builds its model. It never throws on
 // the content of a contract; every problem is a diagnostic with a code.
 
-import { checkDeclarations } from "./declarations.js";
+import { checkDeclarations, checkExtensions } from "./declarations.js";
 import type { Diagnostic } from "./diagnostics.js";
+import { normalizeExtensions } from "./extensions.js";
 import { checkIdentity, checkImports, checkRootShape } from "./identity.js";
+import { normalizeDeclarations } from "./kinds.js";
 import { buildModel, type ContractModel } from "./model.js";
 import { checkPermissions } from "./permissions.js";
 import { NormalizeState, describeError } from "./state.js";
@@ -25,8 +27,10 @@ export type NormalizeResult =
 /**
  * Checks a contract root and builds its normalized model. The phases run in
  * a fixed order: (1) identity, imports and permissions; (2) declaration
- * envelopes and names. Diagnostics come in the order of the phases and,
- * within a phase, in the order of the input.
+ * envelopes and names, descriptors; (3) each declaration's kind; (4) the
+ * names of extensions, then their sections. Phases 3 and 4 run only when
+ * phases 1 and 2 found no errors. Diagnostics come in the order of the phases
+ * and, within a phase, in the order of the input.
  */
 export function normalize(root: unknown): NormalizeResult {
   const state = new NormalizeState();
@@ -54,6 +58,14 @@ function run(state: NormalizeState, input: unknown): NormalizeResult {
   checkPermissions(state, root);
 
   checkDeclarations(state, root);
+  checkExtensions(state, root);
+
+  if (state.diagnostics.hasErrors()) {
+    return { ok: false, diagnostics: state.diagnostics.list() };
+  }
+
+  normalizeDeclarations(state);
+  normalizeExtensions(state);
 
   const diagnostics = state.diagnostics.list();
   if (state.diagnostics.hasErrors()) return { ok: false, diagnostics };
@@ -65,7 +77,10 @@ function run(state: NormalizeState, input: unknown): NormalizeResult {
     },
     imports: Object.fromEntries(state.imports),
     permissions: Object.fromEntries(state.permissions),
-    declarations: {},
+    declarations: state.modelDeclarations,
+    ...(state.extensions.length === 0
+      ? {}
+      : { extensions: state.modelExtensions }),
   });
   return { ok: true, model, diagnostics };
 }
