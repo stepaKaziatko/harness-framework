@@ -270,7 +270,14 @@ class SchemaWalk {
         [...Object.keys(propertiesB), ...requiredB].map((name) => [name, 0]),
       ),
     );
+    // A removed property falls under the additionalProperties of the next
+    // object; a new one was covered by those of the previous object.
     const open = isOpen(own(after, "additionalProperties"));
+    const previousAdditional = own(before, "additionalProperties");
+    const previousSchema =
+      isObject(previousAdditional) && !isOpen(previousAdditional)
+        ? previousAdditional
+        : undefined;
     for (const name of names) {
       const at = [...path, "properties", name];
       const inA = hasOwn(propertiesA, name);
@@ -282,6 +289,9 @@ class SchemaWalk {
           this.direction === "input" && open ? "compatible" : "breaking",
           `${show(at)} was removed`,
         );
+        if (isRequired.has(name) && !wasRequired.has(name)) {
+          this.requiredAdded(at);
+        }
         continue;
       }
       if (!inA && inB) {
@@ -293,6 +303,11 @@ class SchemaWalk {
             "compatible",
             `${show(at)} was added as an optional property`,
           );
+        }
+        // Values of the property were accepted by the previous
+        // additionalProperties schema: compare that schema with the new one.
+        if (previousSchema !== undefined) {
+          this.subschema(previousSchema, propertiesB[name], at);
         }
         continue;
       }
