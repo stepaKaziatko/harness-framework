@@ -1,3 +1,3 @@
-// Public entry point of @harness-framework/sandbox.
+// Public entry point of @paddockjs/sandbox.
 // Intentionally empty until the package receives its first real API.
 export {};

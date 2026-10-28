@@ -1,7 +1,7 @@
 {
-  "name": "@harness-framework/contract",
+  "name": "@paddockjs/contract",
   "version": "0.0.0",
-  "description": "Contract layer of the harness framework.",
+  "description": "Contract layer of the Paddock framework.",
   "license": "MIT",
   "type": "module",
   "exports": {

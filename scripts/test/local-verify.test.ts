@@ -135,10 +135,32 @@ describe("statusDescription", () => {
   it("names the steps and the merged main commit", () => {
     expect(
       statusDescription({ passed: true, failedStep: undefined, mainSha }),
-    ).toBe("pnpm verify passed, main@c427604d72a9");
+    ).toBe("pnpm verify + pnpm verify:publish passed, main@c427604d72a9");
     expect(
       statusDescription({ passed: false, failedStep: "pnpm verify", mainSha }),
     ).toBe("pnpm verify failed, main@c427604d72a9");
+  });
+
+  it("names the publish check when it is the step that failed", () => {
+    expect(
+      statusDescription({
+        passed: false,
+        failedStep: "pnpm verify:publish",
+        mainSha,
+      }),
+    ).toBe("pnpm verify:publish failed, main@c427604d72a9");
+  });
+
+  it("fits the GitHub limit with every step named", () => {
+    const description = statusDescription({
+      passed: true,
+      failedStep: undefined,
+      mainSha,
+    });
+    expect(description).toContain(
+      VERIFY_STEPS.map((step) => step.name).join(" + "),
+    );
+    expect(description.length).toBeLessThanOrEqual(MAX_DESCRIPTION_LENGTH);
   });
 
   it("omits main when it is unknown", () => {
@@ -148,7 +170,7 @@ describe("statusDescription", () => {
         failedStep: undefined,
         mainSha: undefined,
       }),
-    ).toBe("pnpm verify passed");
+    ).toBe("pnpm verify + pnpm verify:publish passed");
   });
 
   it("never exceeds the GitHub limit", () => {
@@ -212,6 +234,15 @@ describe("constants", () => {
       name: "pnpm verify",
       command: "pnpm",
       args: ["verify"],
+    });
+  });
+
+  it("runs the publish check second, after pnpm verify", () => {
+    expect(VERIFY_STEPS).toHaveLength(2);
+    expect(VERIFY_STEPS[1]).toEqual({
+      name: "pnpm verify:publish",
+      command: "pnpm",
+      args: ["verify:publish"],
     });
   });
 });

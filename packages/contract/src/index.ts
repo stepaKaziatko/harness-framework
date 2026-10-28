@@ -1,3 +1,3 @@
-// Public entry point of @harness-framework/contract.
+// Public entry point of @paddockjs/contract.
 // Intentionally empty until the package receives its first real API.
 export {};

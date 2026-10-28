@@ -1,4 +1,4 @@
-# Harness framework
+# Paddock
 
 A contract-first customization layer for existing products. The product team
 describes its core once — data sources, intents, widgets, slots, permissions —
@@ -22,13 +22,16 @@ The core is described, not rewritten.
 
 ```
 packages/contract   defineWidget / defineSource / defineIntent, shared types
-packages/cli        harness init / gen / check / publish
-packages/react      HarnessProvider, Slot, layout renderer
+packages/cli        paddock init / gen / check / publish
+packages/react      PaddockProvider, Slot, layout renderer
 packages/server     config storage API, permission gate, intents bridge
 packages/sandbox    host for code plugins (Worker + remote-ui protocol)
 ```
 
-Package names on npm are a working name until the naming decision lands.
+The packages are published under the `@paddockjs` npm scope, as
+`@paddockjs/<package>`; the CLI binary is `paddock`. The decision and its
+evidence are in `docs/adr/0002-package-name-and-npm-scope.md`. The repositories
+are still named `harness-framework` and `harness-pilot`.
 
 ## Status
 
@@ -39,9 +42,13 @@ application ([harness-pilot](https://github.com/stepaKaziatko/harness-pilot)).
 ## Development
 
 Verification runs on the developer's machine, not on a hosted CI: `pnpm verify`
-runs typecheck, build, lint and tests, and its result is attached to the commit
-as the `local/verify` status. Pull requests into `main` require that status.
-Run `node scripts/local-verify.mjs` on a clean, pushed commit to do both.
+runs typecheck, build, lint and tests, and `pnpm verify:publish` packs every
+package, installs the tarballs into a temporary project outside the repository
+and checks that each one imports from `dist`, type-checks on `nodenext`
+resolution and refuses deep imports past its `exports`. The result of both is
+attached to the commit as the `local/verify` status. Pull requests into `main`
+require that status. Run `node scripts/local-verify.mjs` on a clean, pushed
+commit to do both.
 
 ## License
 

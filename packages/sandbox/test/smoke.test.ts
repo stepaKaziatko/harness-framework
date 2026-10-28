@@ -7,7 +7,7 @@ const manifest = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ) as { exports: Record<string, unknown> };
 
-describe("@harness-framework/sandbox", () => {
+describe("@paddockjs/sandbox", () => {
   it("loads its entry module", async () => {
     const entry: unknown = await import("../src/index.js");
     expect(entry).toBeTypeOf("object");

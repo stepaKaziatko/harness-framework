@@ -15,6 +15,7 @@ export const MAX_DESCRIPTION_LENGTH = 140;
  */
 export const VERIFY_STEPS = [
   { name: "pnpm verify", command: "pnpm", args: ["verify"] },
+  { name: "pnpm verify:publish", command: "pnpm", args: ["verify:publish"] },
 ];
 
 /**
