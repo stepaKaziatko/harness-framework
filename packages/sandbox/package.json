@@ -1,7 +1,7 @@
 {
-  "name": "@harness-framework/sandbox",
+  "name": "@paddockjs/sandbox",
   "version": "0.0.0",
-  "description": "Sandbox host for code plugins of the harness framework.",
+  "description": "Sandbox host for code plugins of the Paddock framework.",
   "license": "MIT",
   "type": "module",
   "exports": {
