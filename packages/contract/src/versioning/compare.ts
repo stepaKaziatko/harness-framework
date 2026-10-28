@@ -46,16 +46,26 @@ export interface CompareOptions {
   }[];
 }
 
-/** The outcome of {@link compareModels}. */
+/** A comparison that was made: the changes, the bump and the diagnostics. */
+interface Compared<Ok extends boolean> {
+  /** True when there is no error among the diagnostics. */
+  readonly ok: Ok;
+  /** In a deterministic order: depth first, keys in code point order. */
+  readonly changes: readonly Change[];
+  readonly requiredBump: RequiredBump;
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+/**
+ * The outcome of {@link compareModels}. `ok` is a literal, so `if (result.ok)`
+ * narrows to a comparison that was made; when `ok` is false, `"changes" in
+ * result` tells a comparison with an insufficient bump from one that was not
+ * made.
+ */
 export type ComparisonResult =
-  | {
-      /** True when there is no error among the diagnostics. */
-      readonly ok: boolean;
-      /** In a deterministic order: depth first, keys in code point order. */
-      readonly changes: readonly Change[];
-      readonly requiredBump: RequiredBump;
-      readonly diagnostics: readonly Diagnostic[];
-    }
+  | Compared<true>
+  /** Compared, and an error is among the diagnostics: the bump is too small. */
+  | Compared<false>
   | {
       /** A model could not be read or a table is invalid: nothing was compared. */
       readonly ok: false;
