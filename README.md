@@ -1,4 +1,4 @@
-# Harness framework
+# Paddock
 
 A contract-first customization layer for existing products. The product team
 describes its core once — data sources, intents, widgets, slots, permissions —
@@ -22,13 +22,16 @@ The core is described, not rewritten.
 
 ```
 packages/contract   defineWidget / defineSource / defineIntent, shared types
-packages/cli        harness init / gen / check / publish
-packages/react      HarnessProvider, Slot, layout renderer
+packages/cli        paddock init / gen / check / publish
+packages/react      PaddockProvider, Slot, layout renderer
 packages/server     config storage API, permission gate, intents bridge
 packages/sandbox    host for code plugins (Worker + remote-ui protocol)
 ```
 
-Package names on npm are a working name until the naming decision lands.
+The packages are published under the `@paddockjs` npm scope, as
+`@paddockjs/<package>`; the CLI binary is `paddock`. The decision and its
+evidence are in `docs/adr/0002-package-name-and-npm-scope.md`. The repositories
+are still named `harness-framework` and `harness-pilot`.
 
 ## Status
 
