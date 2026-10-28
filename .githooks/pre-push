@@ -1,0 +1,5 @@
+#!/bin/sh
+# Reminder only: this hook never blocks a push and never sets a commit status.
+# Installed by `pnpm install` (the `prepare` script sets core.hooksPath).
+echo "reminder: run 'node scripts/local-verify.mjs' to attach the local/verify status before opening or merging a pull request" >&2
+exit 0
