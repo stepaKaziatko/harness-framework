@@ -10,6 +10,7 @@ import {
   type Diagnostic,
   type Source,
   type SourceDiagnosticCode,
+  type SourceInput,
   type SourceSpec,
   type SourceSubscription,
 } from "../src/index.js";
@@ -108,6 +109,20 @@ describe("the entry point and the types (A1, A2, A3, A4)", () => {
     expectTypeOf<SourceSpec["subscription"]>().toEqualTypeOf<
       SourceSubscription | undefined
     >();
+    // The input of `defineSource` is a public type of the entry point.
+    const input: SourceInput<typeof HistoryParams, typeof History> = {
+      name: "history",
+      params: HistoryParams,
+      result: History,
+    };
+    expectTypeOf(input.result).toEqualTypeOf<typeof History>();
+    expectTypeOf(defineSource<typeof HistoryParams, typeof History>)
+      .parameter(0)
+      .toEqualTypeOf<SourceInput<typeof HistoryParams, typeof History>>();
+    expect(defineSource(input)).toMatchObject({
+      kind: "source",
+      name: "history",
+    });
   });
 
   it("keeps the types of the schemas in the declaration (A4)", () => {
@@ -355,6 +370,25 @@ describe("diagnostics of the kind (D1 to D9)", () => {
         loose({ result: Anything, subscription: { intervalMs: undefined } }),
       ),
     ).toEqual([["source.invalid-subscription", at("subscription")]]);
+  });
+
+  it("reports an unknown key and a missing intervalMs together (D4)", () => {
+    const found = normalize(
+      rootOf(loose({ result: Anything, subscription: { mode: "delta" } })),
+    );
+    expect(found.ok).toBe(false);
+    expect(found.diagnostics.map(({ code, path }) => ({ code, path }))).toEqual(
+      [
+        {
+          code: "source.invalid-subscription",
+          path: ["declarations", 0, "subscription", "mode"],
+        },
+        {
+          code: "source.invalid-subscription",
+          path: ["declarations", 0, "subscription"],
+        },
+      ],
+    );
   });
 
   it("rejects an unknown key of a subscription (D4)", () => {
