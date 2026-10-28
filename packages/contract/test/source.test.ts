@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  compareModels,
   defineContract,
   defineSource,
   normalize,
@@ -538,21 +539,30 @@ describe("the catalog of codes (D10)", () => {
 });
 
 describe("the change table and the registration (C1 to C3)", () => {
-  it("is the table of the design, with the known limitation (C1)", () => {
+  it("is the table of the design (C1)", () => {
     expect(sourceKind.changes).toStrictEqual({
       fields: {
         params: { rule: "schema", direction: "input" },
         result: { rule: "schema", direction: "output" },
         subscription: {
-          rule: "nested",
-          table: { fields: { intervalMs: { rule: "breaking" } } },
+          rule: "optional",
+          added: "compatible",
+          removed: "breaking",
+          value: {
+            rule: "nested",
+            table: {
+              fields: {
+                intervalMs: {
+                  rule: "number",
+                  increased: "breaking",
+                  decreased: "compatible",
+                },
+              },
+            },
+          },
         },
       },
     });
-    // Known limitation (HAF-25): the subscription has no presence class and
-    // intervalMs no direction, so every change of it is breaking.
-    const subscription = sourceKind.changes.fields.subscription;
-    expect(subscription).toMatchObject({ rule: "nested" });
     expect(sourceKind.changes.entry).toBeUndefined();
   });
 
@@ -574,12 +584,90 @@ describe("the change table and the registration (C1 to C3)", () => {
     const feed = model.declarations["trading.quotes.feed"]
       ?.spec as unknown as SourceSpec;
     const rule = fields.subscription;
-    if (rule?.rule !== "nested" || typeof rule.table !== "object") {
-      throw new Error("subscription must be a nested rule");
+    if (
+      rule?.rule !== "optional" ||
+      rule.value.rule !== "nested" ||
+      typeof rule.value.table !== "object"
+    ) {
+      throw new Error("subscription must be an optional nested rule");
     }
+    const table = rule.value.table;
     for (const key of Object.keys(feed.subscription ?? {})) {
-      expect(Object.keys(rule.table.fields)).toContain(key);
+      expect(Object.keys(table.fields)).toContain(key);
     }
     expect(Object.keys(feed.subscription ?? {}).length).toBeGreaterThan(0);
+  });
+});
+
+describe("versions of a source, compared (C4)", () => {
+  const INTERVAL = [
+    "declarations",
+    "trading.quotes.feed",
+    "spec",
+    "subscription",
+  ];
+
+  /** The model of the reference contract with a feed of the given extra. */
+  function feedModel(subscription?: { intervalMs: number }): ContractModel {
+    return modelOf(
+      rootOf(
+        defineSource({
+          name: "quotes.feed",
+          result: z.array(Quote),
+          requires: ["quotes.read"],
+          ...(subscription === undefined ? {} : { subscription }),
+        }),
+      ),
+    );
+  }
+
+  function compared(before: ContractModel, after: ContractModel) {
+    const result = compareModels(before, after, { kinds: [sourceKind] });
+    if (!("changes" in result)) throw new Error(JSON.stringify(result));
+    return {
+      changes: result.changes.map((change) => [
+        change.code,
+        change.path,
+        change.class,
+      ]),
+      requiredBump: result.requiredBump,
+    };
+  }
+
+  it("a subscription added is compatible", () => {
+    expect(compared(feedModel(), feedModel({ intervalMs: 1000 }))).toEqual({
+      changes: [["field.added", INTERVAL, "compatible"]],
+      requiredBump: "minor",
+    });
+  });
+
+  it("a subscription removed is breaking", () => {
+    expect(compared(feedModel({ intervalMs: 1000 }), feedModel())).toEqual({
+      changes: [["field.removed", INTERVAL, "breaking"]],
+      requiredBump: "major",
+    });
+  });
+
+  it("a feed that updates more often is compatible", () => {
+    expect(
+      compared(feedModel({ intervalMs: 1000 }), feedModel({ intervalMs: 500 })),
+    ).toEqual({
+      changes: [
+        ["number.decreased", [...INTERVAL, "intervalMs"], "compatible"],
+      ],
+      requiredBump: "minor",
+    });
+  });
+
+  it("a feed that updates less often is breaking", () => {
+    expect(
+      compared(
+        feedModel({ intervalMs: 1000 }),
+        feedModel({ intervalMs: 5000 }),
+      ),
+    ).toEqual({
+      changes: [["number.increased", [...INTERVAL, "intervalMs"], "breaking"]],
+      requiredBump: "major",
+    });
   });
 });

@@ -1,9 +1,7 @@
 // How changes of the `spec` of a source are classified (ADR 0004). The rules
-// come from the closed set of ADR 0003.
-//
-// Known limitations, both resolved on the safe side: the closed set has no
-// class for a field that appears or disappears and no directional rule for a
-// number, so adding a subscription and any change of `intervalMs` are
+// come from the closed set of ADR 0003 and ADR 0007: a subscription added to
+// a source is compatible and removed is breaking; `intervalMs` is the least
+// interval between updates, so lowering it is compatible and raising it is
 // breaking.
 
 import type { ChangeTable } from "../../core/changes.js";
@@ -14,8 +12,21 @@ export const sourceChanges: ChangeTable = {
     params: { rule: "schema", direction: "input" },
     result: { rule: "schema", direction: "output" },
     subscription: {
-      rule: "nested",
-      table: { fields: { intervalMs: { rule: "breaking" } } },
+      rule: "optional",
+      added: "compatible",
+      removed: "breaking",
+      value: {
+        rule: "nested",
+        table: {
+          fields: {
+            intervalMs: {
+              rule: "number",
+              increased: "breaking",
+              decreased: "compatible",
+            },
+          },
+        },
+      },
     },
   },
 };

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
+  compareModels,
   defineContract,
   defineIntent,
   diagnosticCodes,
@@ -136,6 +137,13 @@ describe("the catalog of the intent kind (T14)", () => {
   });
 });
 
+const WINDOW = {
+  rule: "optional",
+  added: "compatible",
+  removed: "compatible",
+  value: { rule: "number", increased: "compatible", decreased: "compatible" },
+};
+
 describe("the change table of the intent kind (T15)", () => {
   it("holds exactly the rows of the intent spec", () => {
     expect(intentKind.changes).toStrictEqual({
@@ -159,9 +167,9 @@ describe("the change table of the intent kind (T15)", () => {
           rule: "nested",
           table: {
             fields: {
-              perMinute: { rule: "compatible" },
-              perHour: { rule: "compatible" },
-              perDay: { rule: "compatible" },
+              perMinute: WINDOW,
+              perHour: WINDOW,
+              perDay: WINDOW,
             },
           },
         },
@@ -205,5 +213,67 @@ describe("the change table of the intent kind (T15)", () => {
     const codes = normalizeFull().diagnostics.map((item) => item.code);
     expect(codes).not.toContain("descriptor.invalid-changes");
     expect(codes).toEqual([]);
+  });
+});
+
+describe("versions of the limits of an intent, compared (T17)", () => {
+  type Limits = Partial<Record<"perMinute" | "perHour" | "perDay", number>>;
+
+  function limitsModel(limits: Limits) {
+    const result = normalize(
+      defineContract({
+        name: "trading",
+        version: "0.1.0",
+        permissions: { "orders.place": {} },
+        declarations: [
+          defineIntent({
+            name: "orders.place",
+            requires: ["orders.place"],
+            confirmation: "user",
+            limits,
+          }),
+        ],
+      }),
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    return result.model;
+  }
+
+  function compared(before: Limits, after: Limits) {
+    const result = compareModels(limitsModel(before), limitsModel(after), {
+      kinds: [intentKind],
+    });
+    if (!("changes" in result)) throw new Error(JSON.stringify(result));
+    return {
+      changes: result.changes.map((change) => [
+        change.code,
+        change.path,
+        change.class,
+      ]),
+      requiredBump: result.requiredBump,
+    };
+  }
+
+  const at = (window: string) => [
+    "declarations",
+    "trading.orders.place",
+    "spec",
+    "limits",
+    window,
+  ];
+
+  // Windows are compared alone, so the order of windows cannot refuse them.
+  describe.each(["perMinute", "perHour", "perDay"])("%s", (window) => {
+    it.each<[string, Limits, Limits, string]>([
+      ["removed", { [window]: 10 }, {}, "field.removed"],
+      ["tightened", { [window]: 10 }, { [window]: 5 }, "number.decreased"],
+      ["loosened", { [window]: 5 }, { [window]: 10 }, "number.increased"],
+      ["introduced", {}, { [window]: 10 }, "field.added"],
+    ])("%s is compatible with its own code", (_title, before, after, code) => {
+      expect(compared(before, after)).toEqual({
+        changes: [[code, at(window), "compatible"]],
+        requiredBump: "minor",
+      });
+    });
   });
 });
