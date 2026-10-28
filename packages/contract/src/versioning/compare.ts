@@ -18,7 +18,7 @@ import { MODEL_FORMAT_VERSION } from "../core/model.js";
 import { isSegment } from "../core/names.js";
 import { isContractVersion } from "../core/semver.js";
 import { describeError } from "../core/state.js";
-import { requiredBumpOf, type RequiredBump } from "./bump.js";
+import { checkBump, requiredBumpOf, type RequiredBump } from "./bump.js";
 import { compareSchemas } from "./schema.js";
 import {
   comparisonDiagnosticCodes,
@@ -295,6 +295,17 @@ export function compareModels(
     if (diagnostics.items.length > 0) return failure(diagnostics);
     const changes: Change[] = walkModels(before, after, tables, compareSchemas);
     const requiredBump = requiredBumpOf(changes);
+    const versions = [before, after].map(
+      (m) => (m.contract as JsonObject).version as string,
+    ) as [string, string];
+    const least = checkBump(versions[0], versions[1], requiredBump);
+    if (least !== undefined) {
+      diagnostics.add(
+        "compare.insufficient-bump",
+        ["next", "contract", "version"],
+        `the next version ${versions[1]} must be ${least}: the changes from ${versions[0]} require ${requiredBump === "none" ? "no bump" : `a ${requiredBump} bump`}`,
+      );
+    }
     return Object.freeze({
       ok: !diagnostics.items.some((item) => item.severity === "error"),
       changes: Object.freeze(changes),
