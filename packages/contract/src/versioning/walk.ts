@@ -188,6 +188,55 @@ const handlers: Handlers = {
       );
     }
   },
+  number: (walker, rule, before, after, path) => {
+    if (typeof before !== "number" || typeof after !== "number") {
+      walker.unclassified(path, "appeared, disappeared or is not a number");
+      return;
+    }
+    if (after > before) {
+      walker.changes.add(
+        "number.increased",
+        path,
+        rule.increased,
+        `${show(path)} grew from ${before} to ${after}`,
+      );
+    } else {
+      walker.changes.add(
+        "number.decreased",
+        path,
+        rule.decreased,
+        `${show(path)} shrank from ${before} to ${after}`,
+      );
+    }
+  },
+  optional: (walker, rule, before, after, path, parents) => {
+    // Absent means the key is missing; null is a present value.
+    if (before === undefined) {
+      walker.changes.add(
+        "field.added",
+        path,
+        rule.added,
+        `${show(path)} was added`,
+      );
+    } else if (after === undefined) {
+      walker.changes.add(
+        "field.removed",
+        path,
+        rule.removed,
+        `${show(path)} was removed`,
+      );
+    } else {
+      const value = rule.value;
+      (handlers[value.rule] as Handler<ChangeRule>)(
+        walker,
+        value,
+        before,
+        after,
+        path,
+        parents,
+      );
+    }
+  },
   schema: (walker, rule, before, after, path) => {
     if (!isObject(before) || !isObject(after)) {
       walker.unclassified(path, "appeared, disappeared or is not a schema");
