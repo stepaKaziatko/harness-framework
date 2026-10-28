@@ -182,6 +182,109 @@ describe("the rules of a kind's table, on the probe kind (C8)", () => {
   });
 });
 
+describe("missing collections and values of the wrong form (R4)", () => {
+  it.each([
+    [
+      "a set that appears is compared with an empty one",
+      (m: Model) => {
+        delete m.declarations["trading.orders.history"].spec.tags;
+      },
+      (m: Model) => {
+        m.declarations["trading.orders.history"].spec.tags = ["a"];
+      },
+      [
+        {
+          code: "set.added",
+          path: [...HISTORY, "tags", 0],
+          class: "compatible",
+        },
+      ],
+    ],
+    [
+      "a set that disappears is compared with an empty one",
+      (m: Model) => {
+        m.declarations["trading.orders.history"].spec.tags = ["a"];
+      },
+      (m: Model) => {
+        delete m.declarations["trading.orders.history"].spec.tags;
+      },
+      [
+        {
+          code: "set.removed",
+          path: [...HISTORY, "tags", 0],
+          class: "breaking",
+        },
+      ],
+    ],
+    [
+      "an ordered value that appears",
+      (m: Model) => {
+        delete m.declarations["trading.orders.history"].spec.level;
+      },
+      () => {},
+      [
+        {
+          code: "value.unclassified",
+          path: [...HISTORY, "level"],
+          class: "breaking",
+        },
+      ],
+    ],
+    [
+      "a schema that is not an object",
+      () => {},
+      (m: Model) => {
+        m.declarations["trading.quotes.feed"].spec.output = "object";
+      },
+      [
+        {
+          code: "value.unclassified",
+          path: [...FEED, "output"],
+          class: "breaking",
+        },
+      ],
+    ],
+    [
+      "an entry of a dictionary that is not an object",
+      () => {},
+      (m: Model) => {
+        m.permissions["trading.quotes.read"] = "read";
+      },
+      [
+        {
+          code: "value.unclassified",
+          path: ["permissions", "trading.quotes.read"],
+          class: "breaking",
+        },
+      ],
+    ],
+  ])("%s", (_title, before, after, expected) => {
+    expect(
+      changesOf(
+        compareModels(edited(before), edited(after), { kinds: [probe] }),
+      ),
+    ).toEqual(expected);
+  });
+
+  it("a dictionary of an extension that is not an object", () => {
+    const section = (panels: unknown) =>
+      edited((m) => {
+        m.extensions = { layout: { panels } };
+      });
+    expect(
+      changesOf(
+        compareModels(section({}), section([]), { extensions: [layout] }),
+      ),
+    ).toEqual([
+      {
+        code: "value.unclassified",
+        path: ["extensions", "layout", "panels"],
+        class: "breaking",
+      },
+    ]);
+  });
+});
+
 describe("a kind's table that was not given (C9)", () => {
   it("makes a changed spec breaking", () => {
     expect(

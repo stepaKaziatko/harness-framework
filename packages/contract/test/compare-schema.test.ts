@@ -665,6 +665,26 @@ describe("narrowing and widening (C14)", () => {
     });
   });
 
+  describe("malformed properties and required", () => {
+    it("properties that are not an object are unrecognized", () => {
+      expectSchema("input", { properties: {} }, { properties: [] }, [
+        ["schema.unrecognized", ["properties"], "breaking"],
+      ]);
+    });
+
+    it("required that is not a list of names is unrecognized", () => {
+      expectSchema("input", { required: ["a"] }, { required: "a" }, [
+        ["schema.unrecognized", ["required"], "breaking"],
+      ]);
+    });
+
+    it("a name required without a property schema is still compared", () => {
+      expectSchema("input", {}, { required: ["a"] }, [
+        ["schema.required-added", ["properties", "a"], "breaking"],
+      ]);
+    });
+  });
+
   describe("anyOf and oneOf as sets of branches", () => {
     const a = { type: "string" };
     const b = { type: "number" };
