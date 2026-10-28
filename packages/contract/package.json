@@ -17,6 +17,12 @@
   "engines": {
     "node": ">=20"
   },
+  "peerDependencies": {
+    "zod": "^4.6.0"
+  },
+  "devDependencies": {
+    "zod": "4.6.7"
+  },
   "scripts": {
     "test": "vitest run --root ../.. packages/contract/"
   }
