@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/contract" },
+    { "path": "packages/cli" },
+    { "path": "packages/react" },
+    { "path": "packages/server" },
+    { "path": "packages/sandbox" }
+  ]
+}

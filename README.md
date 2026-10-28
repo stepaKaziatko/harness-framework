@@ -11,12 +11,12 @@ The core is described, not rewritten.
 
 ## Layers
 
-| Layer | Purpose |
-|---|---|
-| Contract | `defineWidget` / `defineSource` / `defineIntent` in TypeScript + zod |
-| Codegen | types, widget registry, config validator, LLM tool schema, fixtures, `contract.json` |
-| Runtime | config and grant storage on the product's backend, layout resolver, permission gate, intents bridge, migrations |
-| Renderer SDK | web first, React Native next |
+| Layer        | Purpose                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| Contract     | `defineWidget` / `defineSource` / `defineIntent` in TypeScript + zod                                            |
+| Codegen      | types, widget registry, config validator, LLM tool schema, fixtures, `contract.json`                            |
+| Runtime      | config and grant storage on the product's backend, layout resolver, permission gate, intents bridge, migrations |
+| Renderer SDK | web first, React Native next                                                                                    |
 
 ## Packages
 
@@ -41,6 +41,7 @@ application ([harness-pilot](https://github.com/stepaKaziatko/harness-pilot)).
 Verification runs on the developer's machine, not on a hosted CI: `pnpm verify`
 runs typecheck, build, lint and tests, and its result is attached to the commit
 as the `local/verify` status. Pull requests into `main` require that status.
+Run `node scripts/local-verify.mjs` on a clean, pushed commit to do both.
 
 ## License
 
