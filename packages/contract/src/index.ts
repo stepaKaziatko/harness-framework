@@ -1,4 +1,5 @@
 // Public entry point of @paddockjs/contract: the contract core.
+// The list of values exported here is an allowlist pinned by test/smoke.test.ts.
 
 export { coreChangeTable } from "./core/changes.js";
 export type {

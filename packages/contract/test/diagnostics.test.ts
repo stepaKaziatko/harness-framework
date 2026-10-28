@@ -516,8 +516,9 @@ describe("core diagnostics (T6)", () => {
 describe("the catalog of core codes (T9)", () => {
   const codes = Object.keys(diagnosticCodes);
 
-  it("has 28 codes", () => {
+  it("has 28 codes, each covered by a case above", () => {
     expect(codes).toHaveLength(28);
+    expect(new Set(Object.keys(cases))).toEqual(new Set(codes));
   });
 
   it.each(codes)("%s follows the grammar of codes", (code) => {
