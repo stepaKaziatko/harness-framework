@@ -1,6 +1,6 @@
 // The shape of change classification tables. A table is data from a closed
 // set of rules, so it can be checked by a test and serialized; the function
-// that compares two versions of a contract reads it (a later task).
+// that compares two versions of a contract reads it (src/versioning, ADR 0006).
 
 import { hasOwn, isPlainArray, isPlainObject } from "./json.js";
 
@@ -46,11 +46,14 @@ export interface OrderedRule {
  * The field is an object described by a nested table. If the nested table
  * has `entry`, the field is a dictionary keyed by name and each value is
  * described by the table. In the core table only, `table: "kind"` means the
- * table of the declaration kind named by the entry's `kind` field.
+ * table of the declaration kind named by the entry's `kind` field, and
+ * `table: "extension"` means a dictionary of extension sections by id: a
+ * section added is compatible, removed is breaking, and its value is compared
+ * by the table of the extension with that id.
  */
 export interface NestedRule {
   readonly rule: "nested";
-  readonly table: ChangeTable | "kind";
+  readonly table: ChangeTable | "kind" | "extension";
 }
 
 /** One rule of the closed set. */
@@ -121,6 +124,7 @@ export const coreChangeTable: ChangeTable = deepFreeze({
         },
       },
     },
+    extensions: { rule: "nested", table: "extension" },
   },
 } satisfies ChangeTable);
 
@@ -192,8 +196,8 @@ function isRule(value: unknown): boolean {
 
 /**
  * True when `value` is a table of the closed set: only the listed rules with
- * exactly their fields, nested tables included. `table: "kind"` is reserved
- * for the core table and is refused here.
+ * exactly their fields, nested tables included. `table: "kind"` and
+ * `table: "extension"` are reserved for the core table and are refused here.
  */
 export function isTable(value: unknown): value is ChangeTable {
   if (!isPlainObject(value)) return false;

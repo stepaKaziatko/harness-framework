@@ -14,6 +14,7 @@ import {
   type DiagnosticPath,
   type JsonValue,
 } from "../src/index.js";
+import { RESERVED_CODE_AREAS } from "../src/core/diagnostics.js";
 import {
   createProbeKind,
   defineProbe,
@@ -30,6 +31,7 @@ const RESERVED_AREAS = [
   "declaration",
   "descriptor",
   "schema",
+  "compare",
 ];
 
 /** A minimal valid root with the given fields replaced. */
@@ -133,6 +135,21 @@ const cases: Record<CoreDiagnosticCode, readonly Case[]> = {
     title: `range ${range}`,
     input: () => root({ imports: [{ contract: "auth", range }] }),
     path: ["imports", 0, "range"],
+  })),
+  "import.empty-range": [
+    { range: ">=2.0.0 <1.0.0", index: 0 },
+    { range: ">=1.0.0 <1.0.0", index: 0 },
+    { range: "^1.0.0 || >=3.0.0 <2.0.0", index: 1 },
+  ].map(({ range, index }) => ({
+    title: `range ${range}`,
+    input: () =>
+      root({
+        imports: [
+          ...(index === 1 ? [{ contract: "billing", range: "^1.0.0" }] : []),
+          { contract: "auth", range },
+        ],
+      }),
+    path: ["imports", index, "range"],
   })),
   "import.self": [
     {
@@ -397,6 +414,32 @@ const cases: Record<CoreDiagnosticCode, readonly Case[]> = {
       path: ["declarations", 0],
     },
     {
+      title: "kind named compare",
+      input: () =>
+        root({
+          declarations: [
+            kind(() => ({}), { kind: "compare" }).declare({ name: "a" }),
+          ],
+        }),
+      path: ["declarations", 0],
+    },
+    {
+      title: "extension named compare",
+      input: () =>
+        root({
+          extensions: [
+            defineExtension({
+              id: "compare",
+              names: () => [],
+              normalize: () => ({}),
+              changes: { fields: {} },
+              diagnostics: {},
+            }).declare({}),
+          ],
+        }),
+      path: ["extensions", 0],
+    },
+    {
       title: "kind that is not a segment",
       input: () =>
         root({
@@ -516,8 +559,8 @@ describe("core diagnostics (T6)", () => {
 describe("the catalog of core codes (T9)", () => {
   const codes = Object.keys(diagnosticCodes);
 
-  it("has 28 codes, each covered by a case above", () => {
-    expect(codes).toHaveLength(28);
+  it("has 29 codes, each covered by a case above", () => {
+    expect(codes).toHaveLength(29);
     expect(new Set(Object.keys(cases))).toEqual(new Set(codes));
   });
 
@@ -529,6 +572,11 @@ describe("the catalog of core codes (T9)", () => {
     const info = diagnosticCodes[code as CoreDiagnosticCode];
     expect(info.severity).toBe("error");
     expect(info.summary.length).toBeGreaterThan(0);
+  });
+
+  it("reserves the areas of the core and of version comparison", () => {
+    expect([...RESERVED_CODE_AREAS]).toEqual(RESERVED_AREAS);
+    expect(Object.isFrozen(RESERVED_CODE_AREAS)).toBe(true);
   });
 
   it("is frozen", () => {

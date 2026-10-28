@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { defineContract, normalize } from "../src/index.js";
 import { isLocalName, isPath, isSegment } from "../src/core/names.js";
-import { isContractVersion, isImportRange } from "../src/core/semver.js";
+import {
+  compareVersions,
+  hasEmptyAlternative,
+  isContractVersion,
+  isImportRange,
+} from "../src/core/semver.js";
 import { defineProbe } from "./support/test-kind.js";
 
 describe("name segments", () => {
@@ -99,6 +104,81 @@ describe("import ranges", () => {
   ])("refuses %j", (range) => expect(isImportRange(range)).toBe(false));
 });
 
+describe("empty alternatives of import ranges (C18)", () => {
+  it.each([
+    ">=2.0.0 <1.0.0",
+    ">=1.0.0 <1.0.0",
+    "^1.0.0 || >=3.0.0 <2.0.0",
+    ">=1.10.0 <1.9.0",
+  ])("finds one in %s", (range) =>
+    expect(hasEmptyAlternative(range)).toBe(true),
+  );
+
+  it.each([
+    ">=1.0.0 <1.0.1",
+    ">=1.2.3 <2.0.0",
+    "^1.0.0 || ^2.0.0",
+    "1.0.0 || >=2.0.0 <3.0.0",
+    ">=1.9.0 <1.10.0",
+  ])("finds none in %s", (range) =>
+    expect(hasEmptyAlternative(range)).toBe(false),
+  );
+
+  it("leaves a range outside the grammar to import.invalid-range alone", () => {
+    const result = normalize(
+      defineContract({
+        name: "trading",
+        version: "1.0.0",
+        imports: [{ contract: "auth", range: ">=1.0.0" }],
+      }),
+    );
+    expect(result.diagnostics.map((item) => item.code)).toEqual([
+      "import.invalid-range",
+    ]);
+  });
+});
+
+describe("version precedence (C16)", () => {
+  const chain = [
+    "1.0.0-alpha",
+    "1.0.0-alpha.1",
+    "1.0.0-alpha.beta",
+    "1.0.0-beta",
+    "1.0.0-beta.2",
+    "1.0.0-beta.11",
+    "1.0.0-rc.1",
+    "1.0.0",
+  ];
+
+  it.each(chain.slice(1).map((higher, index) => [chain[index], higher]))(
+    "%s < %s",
+    (lower, higher) => {
+      expect(compareVersions(lower as string, higher as string)).toBeLessThan(
+        0,
+      );
+      expect(
+        compareVersions(higher as string, lower as string),
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it.each([
+    ["1.10.0", "1.9.0"],
+    ["2.0.0", "1.99.99"],
+    ["1.2.10", "1.2.9"],
+    ["1.0.0-rc-2", "1.0.0-rc-10"],
+    ["1.0.0-a.b.c", "1.0.0-a.b"],
+  ])("%s > %s", (higher, lower) => {
+    expect(compareVersions(higher, lower)).toBeGreaterThan(0);
+    expect(compareVersions(lower, higher)).toBeLessThan(0);
+  });
+
+  it.each(["1.0.0", "0.0.0", "1.0.0-rc.1", "1.0.0-x-y.7"])(
+    "%s equals itself",
+    (version) => expect(compareVersions(version, version)).toBe(0),
+  );
+});
+
 describe("valid forms pass normalize without diagnostics (T7)", () => {
   it.each(["0.1.0", "1.0.0-rc.1"])("version %s", (version) => {
     expect(
@@ -106,17 +186,21 @@ describe("valid forms pass normalize without diagnostics (T7)", () => {
     ).toMatchObject({ ok: true, diagnostics: [] });
   });
 
-  it.each(["1.2.3", "^1.2.3", "~1.2.3", ">=1.2.3 <2.0.0", "^1.0.0 || ^2.0.0"])(
-    "range %s",
-    (range) => {
-      const root = defineContract({
-        name: "trading",
-        version: "1.0.0",
-        imports: [{ contract: "auth", range }],
-      });
-      expect(normalize(root)).toMatchObject({ ok: true, diagnostics: [] });
-    },
-  );
+  it.each([
+    "1.2.3",
+    "^1.2.3",
+    "~1.2.3",
+    ">=1.2.3 <2.0.0",
+    ">=1.0.0 <1.0.1",
+    "^1.0.0 || ^2.0.0",
+  ])("range %s", (range) => {
+    const root = defineContract({
+      name: "trading",
+      version: "1.0.0",
+      imports: [{ contract: "auth", range }],
+    });
+    expect(normalize(root)).toMatchObject({ ok: true, diagnostics: [] });
+  });
 
   it.each(["a", "quotes-feed", "a.b.c", "x".repeat(32)])("name %s", (name) => {
     const root = defineContract({

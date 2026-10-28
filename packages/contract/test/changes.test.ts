@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { coreChangeTable, defineContract, normalize } from "../src/index.js";
+import {
+  coreChangeTable,
+  defineContract,
+  defineDeclarationKind,
+  normalize,
+} from "../src/index.js";
 import { isTable } from "../src/core/changes.js";
 import { probeChanges, defineProbe } from "./support/test-kind.js";
 
@@ -59,6 +64,7 @@ describe("coreChangeTable (T15)", () => {
             },
           },
         },
+        extensions: { rule: "nested", table: "extension" },
       },
     });
     expect(Object.keys(coreChangeTable.fields)).not.toContain("formatVersion");
@@ -79,7 +85,9 @@ describe("coreChangeTable (T15)", () => {
         rules.add(
           rule.rule === "schema" ? `schema:${rule.direction}` : rule.rule,
         );
-        if (rule.rule === "nested" && rule.table !== "kind") walk(rule.table);
+        if (rule.rule === "nested" && typeof rule.table === "object") {
+          walk(rule.table);
+        }
       }
     };
     walk(probeChanges);
@@ -159,6 +167,10 @@ describe("the closed set of rules", () => {
       { fields: { a: { rule: "nested", table: "kind" } } },
     ],
     [
+      "the core-only extension table",
+      { fields: { a: { rule: "nested", table: "extension" } } },
+    ],
+    [
       "an entry with an unknown class",
       { entry: { added: "maybe", removed: "breaking" }, fields: {} },
     ],
@@ -167,6 +179,35 @@ describe("the closed set of rules", () => {
     ["a function", () => ({ fields: {} })],
   ])("refuses %s", (_title, table) => {
     expect(isTable(table)).toBe(false);
+  });
+
+  it("refuses the core-only extension label in a kind's table", () => {
+    const rogue = defineDeclarationKind({
+      kind: "rogue",
+      normalize: () => ({}),
+      changes: {
+        fields: { a: { rule: "nested", table: "extension" } },
+      },
+      diagnostics: {},
+    });
+    const result = normalize(
+      defineContract({
+        name: "t",
+        version: "1.0.0",
+        declarations: [rogue.declare({ name: "a" })],
+      }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [
+        {
+          code: "descriptor.invalid-changes",
+          severity: "error",
+          path: ["declarations", 0],
+          message: expect.any(String),
+        },
+      ],
+    });
   });
 
   it("accepts a dictionary table with entry classes", () => {

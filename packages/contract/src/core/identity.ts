@@ -2,7 +2,11 @@
 
 import { hasOwn, isPlainArray, isPlainObject } from "./json.js";
 import { isSegment } from "./names.js";
-import { isContractVersion, isImportRange } from "./semver.js";
+import {
+  hasEmptyAlternative,
+  isContractVersion,
+  isImportRange,
+} from "./semver.js";
 import type { NormalizeState } from "./state.js";
 
 /** The keys a root may have. */
@@ -171,6 +175,13 @@ export function checkImports(
         "import.invalid-range",
         [...path, "range"],
         `the range "${range}" must be X.Y.Z, ^X.Y.Z, ~X.Y.Z or ">=X.Y.Z <X.Y.Z", joined by " || ", without pre-releases`,
+      );
+      valid = false;
+    } else if (hasEmptyAlternative(range)) {
+      state.diagnostics.core(
+        "import.empty-range",
+        [...path, "range"],
+        `the range "${range}" has an alternative ">=A <B" where B is not greater than A, so it matches no version`,
       );
       valid = false;
     }

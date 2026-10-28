@@ -59,3 +59,61 @@ export function isImportRange(value: unknown): value is string {
     return false;
   });
 }
+
+/**
+ * True when an alternative `>=A <B` of a range (already accepted by
+ * {@link isImportRange}) has `B` not greater than `A`, so it matches no
+ * version.
+ */
+export function hasEmptyAlternative(range: string): boolean {
+  return range.split(" || ").some((alternative) => {
+    const bounded = BOUNDED.exec(alternative);
+    return (
+      bounded !== null &&
+      compareVersions(bounded[2] as string, bounded[1] as string) <= 0
+    );
+  });
+}
+
+function compareIdentifiers(a: string, b: string): number {
+  const numericA = /^\d+$/.test(a);
+  const numericB = /^\d+$/.test(b);
+  if (numericA && numericB) return Math.sign(Number(a) - Number(b));
+  if (numericA) return -1;
+  if (numericB) return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Compares two versions accepted by {@link isContractVersion} by SemVer 2.0.0
+ * precedence: a negative number when `a` is lower, `0` when they are equal, a
+ * positive number when `a` is higher. Internal to the package.
+ */
+export function compareVersions(a: string, b: string): number {
+  const [coreA, ...restA] = a.split("-");
+  const [coreB, ...restB] = b.split("-");
+  const numbersA = (coreA as string).split(".").map(Number);
+  const numbersB = (coreB as string).split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = Math.sign(
+      (numbersA[index] as number) - (numbersB[index] as number),
+    );
+    if (difference !== 0) return difference;
+  }
+  const preA = restA.join("-");
+  const preB = restB.join("-");
+  if (preA === "" || preB === "") {
+    return preA === preB ? 0 : preA === "" ? 1 : -1;
+  }
+  const idsA = preA.split(".");
+  const idsB = preB.split(".");
+  const length = Math.min(idsA.length, idsB.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = compareIdentifiers(
+      idsA[index] as string,
+      idsB[index] as string,
+    );
+    if (difference !== 0) return difference;
+  }
+  return Math.sign(idsA.length - idsB.length);
+}
