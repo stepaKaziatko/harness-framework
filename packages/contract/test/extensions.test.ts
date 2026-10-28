@@ -118,6 +118,32 @@ describe("the test extension (T12)", () => {
     ]);
   });
 
+  it("refuses a code of its catalog that lacks the extension's prefix", () => {
+    for (const code of ["other.code", "root.invalid-shape"]) {
+      const section = defineExtension({
+        id: "rogue",
+        names: () => [],
+        normalize: (_section, context) => {
+          context.report(code, [], "x");
+          return null;
+        },
+        changes: { fields: {} },
+        diagnostics: {
+          "rogue.known": { severity: "error", summary: "Known." },
+          "other.code": { severity: "error", summary: "Foreign." },
+          "root.invalid-shape": {
+            severity: "warning",
+            summary: "A core code.",
+          },
+        },
+      }).declare({});
+      const result = normalize(root([section]));
+      expect(result.diagnostics.map((item) => [item.code, item.path])).toEqual([
+        ["descriptor.undeclared-code", ["extensions", 0]],
+      ]);
+    }
+  });
+
   it("holds extensions to the same discipline as kinds", () => {
     const make = (names: () => unknown, normalizeSection: () => unknown) =>
       defineExtension({
@@ -140,6 +166,23 @@ describe("the test extension (T12)", () => {
       [
         make(
           () => "names",
+          () => null,
+        ),
+        "descriptor.failed",
+      ],
+      [
+        make(
+          () => [{}],
+          () => null,
+        ),
+        "descriptor.failed",
+      ],
+      [
+        make(
+          () => [
+            { name: "a", kind: "panel" },
+            { name: 1, kind: "panel" },
+          ],
           () => null,
         ),
         "descriptor.failed",

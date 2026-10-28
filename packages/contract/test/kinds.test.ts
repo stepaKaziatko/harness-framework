@@ -322,6 +322,34 @@ describe("the core keeps kinds in line (T13)", () => {
     ).toEqual([["rogue.known", ["declarations", 0, "field"]]]);
   });
 
+  it("refuses a code of its catalog that lacks the kind's prefix", () => {
+    const catalog = {
+      "rogue.known": { severity: "error" as const, summary: "Known." },
+      "other.code": { severity: "error" as const, summary: "Foreign." },
+      "probe.unusual": { severity: "warning" as const, summary: "Foreign." },
+      "root.invalid-shape": {
+        severity: "warning" as const,
+        summary: "A core code.",
+      },
+    };
+    for (const code of ["other.code", "probe.unusual", "root.invalid-shape"]) {
+      const kind = rogue(
+        (_declaration, context) => {
+          context.report(code, ["field"], "x");
+          return null;
+        },
+        "rogue",
+        catalog,
+      );
+      const result = normalize(
+        root({ declarations: [kind.declare({ name: "a" })] }),
+      );
+      expect(codesAndPaths(result)).toEqual([
+        ["descriptor.undeclared-code", ["declarations", 0]],
+      ]);
+    }
+  });
+
   it("turns an exception into descriptor.failed and goes on", () => {
     const kind = rogue((declaration) => {
       if (declaration.name === "a") throw new Error("boom");

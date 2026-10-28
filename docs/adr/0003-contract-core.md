@@ -65,10 +65,11 @@ depend on the tracker.
 - A contract version is SemVer 2.0.0. A pre-release is allowed; build metadata
   is not, because two contracts would then share one precedence.
 - An import range uses its own narrow grammar: `X.Y.Z`, `^X.Y.Z`, `~X.Y.Z` or
-  `>=X.Y.Z <X.Y.Z`, joined by `||`, without pre-releases and without leading
-  zeros. Every accepted range is a valid node-semver range with the same
-  meaning, so switching to `semver` later is compatible. The package does not
-  depend on `semver`.
+  `>=X.Y.Z <X.Y.Z`, joined by `||` with a space on each side, without
+  pre-releases and without leading zeros. `^1.0.0||^2.0.0` is refused, although
+  node-semver accepts it. Every accepted range is a valid node-semver range
+  with the same meaning, so switching to `semver` later is compatible. The
+  package does not depend on `semver`.
 
 ### Namespaces and references
 
@@ -289,6 +290,24 @@ description? }` plus the payload of its kind.
   modules and `zod/v4/core`; `src/kinds/**` and `src/versioning/**` import only
   the core; `src/index.ts` does not import the presentation layer. A test lints
   probe imports through the ESLint API, so the rule cannot disappear silently.
+- `"."` exports exactly seven values, pinned by `test/smoke.test.ts`:
+  `defineContract`, `normalize`, `defineDeclarationKind`, `defineExtension`,
+  `diagnosticCodes`, `coreChangeTable` and `MODEL_FORMAT_VERSION`.
+- `"."` exports these types:
+  - root: `ContractInput`, `ContractRoot`, `ImportInput`, `PermissionInput`,
+    `Subject`, `EndUserSubject`;
+  - kinds and extensions: `DeclarationKindOptions`, `DeclarationKind`,
+    `Declaration`, `DeclarationEnvelope`, `DeclarationContext`,
+    `ExtensionOptions`, `Extension`, `ExtensionSection`, `ExtensionName`,
+    `ExtensionContext`, `NormalizeContext`, `ResolveOptions`,
+    `ModelDeclaration`, `Stability`;
+  - model: `ContractModel`, `ModelImport`, `ModelPermission`,
+    `NormalizeResult`, `JsonValue`, `JsonObject`, `JsonArray`, `JsonPrimitive`;
+  - diagnostics: `Diagnostic`, `DiagnosticPath`, `DiagnosticCatalog`,
+    `DiagnosticCodeInfo`, `CoreDiagnosticCode`, `Severity`;
+  - change tables: `ChangeTable`, `ChangeRule`, `ChangeClass`,
+    `AddRemoveClasses`, `BreakingRule`, `CompatibleRule`, `NestedRule`,
+    `OrderedRule`, `SchemaRule`, `SetRule`.
 
 ## Consequences
 
