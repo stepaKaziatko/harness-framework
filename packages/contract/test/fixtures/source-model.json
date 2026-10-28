@@ -1,0 +1,125 @@
+{
+  "contract": {
+    "name": "trading",
+    "version": "0.1.0"
+  },
+  "declarations": {
+    "trading.quotes.feed": {
+      "description": "Latest quotes of all instruments",
+      "kind": "source",
+      "requires": ["trading.quotes.read"],
+      "spec": {
+        "params": {
+          "properties": {},
+          "type": "object"
+        },
+        "result": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "prevCloseCents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "priceCents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "symbol": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "prevCloseCents",
+              "priceCents",
+              "symbol",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "subscription": {
+          "intervalMs": 1000
+        }
+      },
+      "stability": "beta"
+    },
+    "trading.quotes.history": {
+      "kind": "source",
+      "requires": ["trading.quotes.read"],
+      "spec": {
+        "params": {
+          "properties": {
+            "limit": {
+              "default": 120,
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "symbol": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": ["symbol"],
+          "type": "object"
+        },
+        "result": {
+          "additionalProperties": false,
+          "properties": {
+            "points": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "priceCents": {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  "ts": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                    "type": "string"
+                  }
+                },
+                "required": ["priceCents", "ts"],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "required": ["points", "symbol"],
+          "type": "object"
+        }
+      },
+      "stability": "internal"
+    }
+  },
+  "formatVersion": 1,
+  "imports": {},
+  "permissions": {
+    "trading.quotes.read": {
+      "description": "Read market quotes",
+      "subjects": [
+        {
+          "kind": "end-user"
+        }
+      ]
+    }
+  }
+}
