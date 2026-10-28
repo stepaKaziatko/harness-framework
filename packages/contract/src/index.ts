@@ -14,6 +14,14 @@ export type {
   SetRule,
 } from "./core/changes.js";
 
+export type {
+  Declaration,
+  DeclarationEnvelope,
+  ExtensionSection,
+  ModelDeclaration,
+  Stability,
+} from "./core/descriptor.js";
+
 export { diagnosticCodes } from "./core/diagnostics.js";
 export type {
   CoreDiagnosticCode,
@@ -30,3 +38,23 @@ export type {
   JsonPrimitive,
   JsonValue,
 } from "./core/json.js";
+
+export { MODEL_FORMAT_VERSION } from "./core/model.js";
+export type {
+  ContractModel,
+  ModelImport,
+  ModelPermission,
+} from "./core/model.js";
+
+export { normalize } from "./core/normalize.js";
+export type { NormalizeResult } from "./core/normalize.js";
+
+export { defineContract } from "./core/root.js";
+export type {
+  ContractInput,
+  ContractRoot,
+  EndUserSubject,
+  ImportInput,
+  PermissionInput,
+  Subject,
+} from "./core/root.js";
