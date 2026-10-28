@@ -1,7 +1,7 @@
 // The normalized model: serializable, deterministic, without code.
 
 import type { ModelDeclaration } from "./descriptor.js";
-import type { JsonValue } from "./json.js";
+import { toCanonicalJson, type JsonValue } from "./json.js";
 import type { Subject } from "./root.js";
 
 /**
@@ -45,7 +45,10 @@ export interface ModelParts {
   readonly extensions?: Readonly<Record<string, JsonValue>>;
 }
 
-/** Builds the model from its parts. */
+/**
+ * Builds the model with every object's keys in code point order, so that
+ * `JSON.stringify(model)` gives the same text for the same contract.
+ */
 export function buildModel(parts: ModelParts): ContractModel {
   const model: Record<string, unknown> = {
     formatVersion: MODEL_FORMAT_VERSION,
@@ -55,5 +58,5 @@ export function buildModel(parts: ModelParts): ContractModel {
     declarations: parts.declarations,
   };
   if (parts.extensions !== undefined) model.extensions = parts.extensions;
-  return model as unknown as ContractModel;
+  return toCanonicalJson(model) as unknown as ContractModel;
 }

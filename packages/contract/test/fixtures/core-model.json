@@ -1,0 +1,124 @@
+{
+  "contract": {
+    "name": "trading",
+    "version": "0.1.0"
+  },
+  "declarations": {
+    "trading.orders.history": {
+      "kind": "probe",
+      "requires": [],
+      "spec": {
+        "level": "low",
+        "refs": [],
+        "tags": []
+      },
+      "stability": "internal"
+    },
+    "trading.orders.place": {
+      "kind": "probe",
+      "requires": ["trading.orders.place", "trading.quotes.read"],
+      "spec": {
+        "input": {
+          "properties": {
+            "quantity": {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "symbol": {
+              "type": "string"
+            },
+            "type": {
+              "default": "market",
+              "enum": ["market", "limit"],
+              "type": "string"
+            }
+          },
+          "required": ["quantity", "symbol"],
+          "type": "object"
+        },
+        "level": "low",
+        "options": {
+          "note": "idempotent",
+          "retries": 2
+        },
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "orderId": {
+              "type": "string"
+            },
+            "status": {
+              "default": "new",
+              "type": "string"
+            }
+          },
+          "required": ["orderId", "status"],
+          "type": "object"
+        },
+        "refs": [
+          "trading.quotes.feed",
+          "trading.quotes.feed",
+          "auth.users.get"
+        ],
+        "tags": []
+      },
+      "stability": "beta"
+    },
+    "trading.quotes.feed": {
+      "description": "Live market quotes",
+      "kind": "probe",
+      "requires": ["trading.quotes.read"],
+      "spec": {
+        "level": "high",
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "price": {
+              "type": "number"
+            },
+            "symbol": {
+              "description": "Ticker symbol",
+              "type": "string"
+            },
+            "venue": {
+              "type": "string"
+            }
+          },
+          "required": ["price", "symbol"],
+          "type": "object"
+        },
+        "refs": [],
+        "tags": ["live", "market"]
+      },
+      "stability": "public"
+    }
+  },
+  "formatVersion": 1,
+  "imports": {
+    "auth": {
+      "range": "^1.4.0"
+    },
+    "billing": {
+      "range": ">=2.0.0 <3.0.0"
+    }
+  },
+  "permissions": {
+    "trading.orders.place": {
+      "description": "Place an order",
+      "subjects": [
+        {
+          "kind": "end-user"
+        }
+      ]
+    },
+    "trading.quotes.read": {
+      "description": "Read market quotes",
+      "subjects": [
+        {
+          "kind": "end-user"
+        }
+      ]
+    }
+  }
+}
