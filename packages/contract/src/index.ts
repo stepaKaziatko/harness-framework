@@ -69,3 +69,12 @@ export type {
   PermissionInput,
   Subject,
 } from "./core/root.js";
+
+// Declaration kind: intent (ADR 0005)
+export { defineIntent, intentKind } from "./kinds/intent/index.js";
+export type {
+  ConfirmationPolicy,
+  IntentInput,
+  IntentLimits,
+  IntentSpec,
+} from "./kinds/intent/index.js";
