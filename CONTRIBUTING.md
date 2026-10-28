@@ -72,6 +72,11 @@ node scripts/local-verify.mjs [--target-url <url>] [--dry-run]
   remote branch. Commit or push the work and run it again. It also refuses if
   `HEAD` or the working tree changes during the run.
 - A status describes one commit. A new commit needs a new run and a new status.
+- `pnpm verify:publish`, one of those steps, installs the packed tarballs with
+  `npm install`, which fetches their dependencies (such as the `zod` peer of
+  `@paddockjs/contract`) from the npm registry. It and therefore
+  `scripts/local-verify.mjs` need network access to the registry; there is no
+  offline mode.
 
 The pre-push hook (`.githooks/pre-push`) only prints a reminder to run
 `scripts/local-verify.mjs`. It does not block a push and does not set a commit

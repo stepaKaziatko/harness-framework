@@ -48,7 +48,9 @@ and checks that each one imports from `dist`, type-checks on `nodenext`
 resolution and refuses deep imports past its `exports`. The result of both is
 attached to the commit as the `local/verify` status. Pull requests into `main`
 require that status. Run `node scripts/local-verify.mjs` on a clean, pushed
-commit to do both.
+commit to do both. `pnpm verify:publish`, and so `local/verify`, needs network
+access to the npm registry, because installing the tarballs fetches their
+dependencies from it.
 
 ## License
 
