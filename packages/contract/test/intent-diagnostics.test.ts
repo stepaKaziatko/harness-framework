@@ -99,6 +99,7 @@ describe("a closed set of keys (T7)", () => {
         params: z.object({ symbol: z.string() }),
         result: z.object({ id: z.number() }),
         limits: { perMinute: 1 },
+        invalidates: ["balance.get"],
       }),
     ).toEqual([]);
   });
@@ -265,11 +266,76 @@ describe("requires (T11)", () => {
   });
 });
 
+describe("invalidates (T12)", () => {
+  it("must be an array", () => {
+    expect(diagnose({ invalidates: "balance.get" })).toEqual([
+      ["intent.invalid-invalidates", [...D, "invalidates"]],
+    ]);
+  });
+
+  it("must hold strings", () => {
+    expect(diagnose({ invalidates: ["balance.get", 42] })).toEqual([
+      ["intent.invalid-invalidates", [...D, "invalidates", 1]],
+    ]);
+  });
+
+  it("refuses an undeclared source", () => {
+    expect(diagnose({ invalidates: ["missing.source"] })).toEqual([
+      ["reference.unknown", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("refuses another intent", () => {
+    const root = defineContract({
+      name: "trading",
+      version: "0.1.0",
+      permissions: { "orders.place": {} },
+      declarations: [
+        defineSourceStub({ name: "balance.get" }),
+        defineIntent({ ...base, name: "orders.cancel" } as never),
+        defineIntent({ ...base, invalidates: ["orders.cancel"] } as never),
+      ],
+    } as never);
+    expect(check(root)).toEqual([
+      ["reference.kind-mismatch", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("refuses the intent itself", () => {
+    expect(diagnose({ invalidates: ["orders.place"] })).toEqual([
+      ["reference.kind-mismatch", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("refuses a name that is not a path", () => {
+    expect(diagnose({ invalidates: ["Bad Name"] })).toEqual([
+      ["reference.invalid", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("refuses a source of an import", () => {
+    const root = rootWith(
+      { ...base, invalidates: ["auth.users.get"] },
+      { imports: [{ contract: "auth", range: "^1.4.0" }] },
+    );
+    expect(check(root)).toEqual([
+      ["intent.foreign-invalidates", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("accepts sources of its own contract", () => {
+    expect(
+      diagnose({ invalidates: ["operations.list", "balance.get"] }),
+    ).toEqual([]);
+  });
+});
+
 describe("every problem in one pass (T13)", () => {
   const broken = {
     name: "orders.place",
     handler: "x",
     limits: { perMinute: 0 },
+    invalidates: [42],
   };
 
   const expected = [
@@ -277,9 +343,10 @@ describe("every problem in one pass (T13)", () => {
     ["intent.missing-requires", [...D, "requires"]],
     ["intent.missing-confirmation", [...D, "confirmation"]],
     ["intent.invalid-limit", [...D, "limits", "perMinute"]],
+    ["intent.invalid-invalidates", [...D, "invalidates", 0]],
   ];
 
-  it("reports four problems of one intent in a fixed order", () => {
+  it("reports five problems of one intent in a fixed order", () => {
     expect(check(rootWith(broken))).toEqual(expected);
     expect(check(rootWith(broken))).toEqual(expected);
   });

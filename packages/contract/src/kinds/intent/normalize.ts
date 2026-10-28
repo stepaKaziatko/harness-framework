@@ -1,12 +1,12 @@
 // Turns an intent declaration into its `spec` (ADR 0005). Every problem of
 // one declaration is reported in a single pass, in a fixed order of fields:
-// unknown keys, `requires`, `params`, `result`, `confirmation`, `limits`.
-// Defaults are written into the spec; `invalidates` is resolved by the next
-// change.
+// unknown keys, `requires`, `params`, `result`, `confirmation`, `limits`,
+// `invalidates`. Defaults are written into the spec.
 
 import type { $ZodType } from "zod/v4/core";
 import type { Declaration, DeclarationContext } from "../../core/descriptor.js";
 import {
+  compareCodePoints,
   isPlainArray,
   isPlainObject,
   type JsonObject,
@@ -118,7 +118,7 @@ export function normalizeIntent(
   }
 
   const limits = normalizeLimits(value.limits, report);
-  const invalidates: JsonValue = [];
+  const invalidates = normalizeInvalidates(value.invalidates, context, report);
   return { confirmation, invalidates, limits, params, result };
 }
 
@@ -182,4 +182,51 @@ function normalizeLimits(limits: unknown, report: Report): JsonValue {
     }
   }
   return Object.fromEntries(valid);
+}
+
+/**
+ * Resolves `invalidates` to qualified names of sources of this contract,
+ * sorted and without repeats.
+ */
+function normalizeInvalidates(
+  invalidates: unknown,
+  context: DeclarationContext,
+  report: Report,
+): JsonValue {
+  if (invalidates === undefined) return [];
+  if (!isPlainArray(invalidates)) {
+    report(
+      "intent.invalid-invalidates",
+      ["invalidates"],
+      "`invalidates` must be an array of source names",
+    );
+    return null;
+  }
+  const own = `${context.contract}.`;
+  const names = new Set<string>();
+  invalidates.forEach((reference, index) => {
+    if (typeof reference !== "string") {
+      report(
+        "intent.invalid-invalidates",
+        ["invalidates", index],
+        "an entry of `invalidates` must be a source name",
+      );
+      return;
+    }
+    const qualified = context.resolve(reference, {
+      kind: "source",
+      path: ["invalidates", index],
+    });
+    if (qualified === undefined) return;
+    if (!qualified.startsWith(own)) {
+      report(
+        "intent.foreign-invalidates",
+        ["invalidates", index],
+        `"${reference}" is a source of an import; an intent invalidates only sources of its own contract`,
+      );
+      return;
+    }
+    names.add(qualified);
+  });
+  return [...names].sort(compareCodePoints);
 }

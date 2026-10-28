@@ -54,6 +54,38 @@ const placeOrder = (invalidates: readonly string[]) =>
     invalidates,
   });
 
+/** The model entry of the full intent of T1, written out by hand. */
+const expectedPlaceOrder = {
+  description: "Place a market order for the selected instrument",
+  kind: "intent",
+  requires: ["trading.orders.place"],
+  spec: {
+    confirmation: { policy: "user" },
+    invalidates: ["trading.balance.get", "trading.operations.list"],
+    limits: { perDay: 200, perMinute: 10 },
+    params: {
+      properties: {
+        quantity: { maximum: 10000, minimum: 1, type: "integer" },
+        side: { enum: ["buy", "sell"], type: "string" },
+        symbol: { type: "string" },
+      },
+      required: ["quantity", "side", "symbol"],
+      type: "object",
+    },
+    result: {
+      additionalProperties: false,
+      properties: {
+        id: { type: "number" },
+        symbol: { type: "string" },
+        totalCents: { type: "number" },
+      },
+      required: ["id", "symbol", "totalCents"],
+      type: "object",
+    },
+  },
+  stability: "beta",
+};
+
 const minimal = {
   name: "session.end",
   requires: ["orders.place"],
@@ -67,6 +99,31 @@ const DEFAULT_SPEC = {
   params: { properties: {}, type: "object" },
   result: {},
 };
+
+describe("a full intent (T1)", () => {
+  it("normalizes into a model entry without diagnostics", () => {
+    const model = modelOf(
+      tradingRoot([placeOrder(["operations.list", "balance.get"])]),
+    );
+    const entry = model.declarations["trading.orders.place"];
+    expect(entry).toStrictEqual(expectedPlaceOrder);
+    expect(JSON.stringify(entry)).toBe(JSON.stringify(expectedPlaceOrder));
+  });
+
+  it("has exactly the five keys of the spec", () => {
+    const spec = specOf(
+      placeOrder(["balance.get"]),
+      "trading.orders.place",
+    ) as object;
+    expect(Object.keys(spec)).toEqual([
+      "confirmation",
+      "invalidates",
+      "limits",
+      "params",
+      "result",
+    ]);
+  });
+});
 
 describe("defaults (T2)", () => {
   it("are written into the spec of a minimal intent", () => {
@@ -151,6 +208,37 @@ describe("schema directions (T3)", () => {
       "trading.session.end",
     ) as Record<string, unknown>;
     expect(spec.result).toStrictEqual({ type: "string" });
+  });
+});
+
+describe("repeats and order of invalidates (T4)", () => {
+  it("give the same spec", () => {
+    const sorted = specOf(
+      placeOrder(["balance.get", "operations.list"]),
+      "trading.orders.place",
+    );
+    const shuffled = specOf(
+      placeOrder(["operations.list", "balance.get", "operations.list"]),
+      "trading.orders.place",
+    );
+    expect(JSON.stringify(shuffled)).toBe(JSON.stringify(sorted));
+    expect((shuffled as { invalidates: unknown }).invalidates).toEqual([
+      "trading.balance.get",
+      "trading.operations.list",
+    ]);
+  });
+
+  it("collapse a repeated name to one", () => {
+    const spec = specOf(
+      placeOrder(["balance.get", "balance.get"]),
+      "trading.orders.place",
+    ) as { invalidates: unknown };
+    expect(spec.invalidates).toEqual(["trading.balance.get"]);
+  });
+
+  it("give one JSON text for two normalizations of one root", () => {
+    const root = tradingRoot([placeOrder(["operations.list", "balance.get"])]);
+    expect(JSON.stringify(modelOf(root))).toBe(JSON.stringify(modelOf(root)));
   });
 });
 

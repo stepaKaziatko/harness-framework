@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import { defineContract, diagnosticCodes, normalize } from "../src/index.js";
 import { defineIntent, intentKind } from "../src/kinds/intent/index.js";
 import { isTable } from "../src/core/changes.js";
+import { defineSourceStub } from "./support/source-stub.js";
 
 const DESCRIPTOR = Symbol.for("@paddockjs/contract/descriptor");
 
@@ -26,6 +28,7 @@ const fullIntent = defineIntent({
   result: z.object({ id: z.number() }),
   confirmation: "user",
   limits: { perMinute: 10, perHour: 100, perDay: 200 },
+  invalidates: ["balance.get"],
 });
 
 function normalizeFull() {
@@ -34,7 +37,7 @@ function normalizeFull() {
       name: "trading",
       version: "0.1.0",
       permissions: { "orders.place": {} },
-      declarations: [fullIntent],
+      declarations: [defineSourceStub({ name: "balance.get" }), fullIntent],
     }),
   );
 }
@@ -115,6 +118,17 @@ describe("the catalog of the intent kind (T14)", () => {
       [],
     );
   });
+
+  it("has every code covered by the diagnostics tests", () => {
+    const tests = readFileSync(
+      new URL("./intent-diagnostics.test.ts", import.meta.url),
+      "utf8",
+    );
+    const covered = new Set(
+      [...tests.matchAll(/"(intent\.[a-z-]+)"/g)].map((match) => match[1]),
+    );
+    expect([...covered].sort()).toEqual(Object.keys(catalog).sort());
+  });
 });
 
 describe("the change table of the intent kind (T15)", () => {
@@ -160,6 +174,25 @@ describe("the change table of the intent kind (T15)", () => {
     expect(deeplyFrozen(intentKind.changes)).toBe(true);
     expect(JSON.parse(JSON.stringify(intentKind.changes))).toStrictEqual(
       intentKind.changes,
+    );
+  });
+
+  it("has a row for every field of the spec and every window of limits", () => {
+    const result = normalizeFull();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const spec = result.model.declarations["trading.orders.place"]
+      ?.spec as Record<string, object>;
+    const fields = intentKind.changes.fields;
+    expect(Object.keys(fields).sort()).toEqual(Object.keys(spec).sort());
+    const limits = fields.limits as {
+      table: { fields: Record<string, unknown> };
+    };
+    expect(Object.keys(limits.table.fields).sort()).toEqual(
+      ["perDay", "perHour", "perMinute"].sort(),
+    );
+    expect(Object.keys(spec.limits as object).sort()).toEqual(
+      Object.keys(limits.table.fields).sort(),
     );
   });
 
