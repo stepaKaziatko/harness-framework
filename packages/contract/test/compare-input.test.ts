@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { defineDeclarationKind, type ChangeTable } from "../src/index.js";
+import {
+  compareModels as compareFromEntry,
+  defineDeclarationKind,
+  type ChangeTable,
+  type ComparisonResult,
+} from "../src/index.js";
 import {
   compareModels,
   type CompareOptions,
@@ -311,5 +316,21 @@ describe("the tables of the options (C3)", () => {
         ],
       }),
     ).toMatchObject({ ok: true, diagnostics: [] });
+  });
+});
+
+describe("the entry point (P3)", () => {
+  it("takes kind and extension descriptors as they are", () => {
+    const result: ComparisonResult = compareFromEntry(model(), model(), {
+      kinds: [probe],
+      extensions: [layout],
+    });
+    expect(result).toEqual({
+      ok: true,
+      changes: [],
+      requiredBump: "none",
+      diagnostics: [],
+    });
+    expect(compareFromEntry).toBe(compareModels);
   });
 });

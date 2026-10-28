@@ -69,3 +69,17 @@ export type {
   PermissionInput,
   Subject,
 } from "./core/root.js";
+
+// Version comparison (ADR 0006).
+export { changeCodes, comparisonDiagnosticCodes } from "./versioning/codes.js";
+export type {
+  ChangeCode,
+  ComparisonDiagnosticCode,
+} from "./versioning/codes.js";
+export { compareModels } from "./versioning/compare.js";
+export type {
+  Change,
+  CompareOptions,
+  ComparisonResult,
+  RequiredBump,
+} from "./versioning/compare.js";
