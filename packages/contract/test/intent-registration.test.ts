@@ -5,12 +5,16 @@ import {
   compareModels,
   defineContract,
   defineIntent,
+  defineSource,
   diagnosticCodes,
   intentKind,
   normalize,
 } from "../src/index.js";
+
+/** A source of the contract: an intent sees only its name and kind. */
+const sourceNamed = (name: string) =>
+  defineSource({ name, result: z.object({}) });
 import { isTable } from "../src/core/changes.js";
-import { defineSourceStub } from "./support/source-stub.js";
 
 const DESCRIPTOR = Symbol.for("@paddockjs/contract/descriptor");
 
@@ -43,7 +47,7 @@ function normalizeFull() {
       name: "trading",
       version: "0.1.0",
       permissions: { "orders.place": {} },
-      declarations: [defineSourceStub({ name: "balance.get" }), fullIntent],
+      declarations: [sourceNamed("balance.get"), fullIntent],
     }),
   );
 }

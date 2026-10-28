@@ -1,12 +1,16 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
+  type ContractModel,
   defineContract,
   defineIntent,
+  defineSource,
   normalize,
-  type ContractModel,
 } from "../src/index.js";
-import { defineSourceStub } from "./support/source-stub.js";
+
+/** A source of the contract: an intent sees only its name and kind. */
+const sourceNamed = (name: string) =>
+  defineSource({ name, result: z.object({}) });
 
 const placeOrderParams = z.object({
   symbol: z.string(),
@@ -26,8 +30,8 @@ function tradingRoot(intents: readonly unknown[]): unknown {
     version: "0.1.0",
     permissions: { "orders.place": {} },
     declarations: [
-      defineSourceStub({ name: "balance.get" }),
-      defineSourceStub({ name: "operations.list" }),
+      sourceNamed("balance.get"),
+      sourceNamed("operations.list"),
       ...intents,
     ],
   } as never);
