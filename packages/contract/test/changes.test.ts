@@ -329,6 +329,15 @@ describe("the rules number and optional", () => {
         value: number,
       },
     ],
+    [
+      "optional with an unknown removed class",
+      {
+        rule: "optional",
+        added: "compatible",
+        removed: "Breaking",
+        value: number,
+      },
+    ],
     ["number without increased", { rule: "number", decreased: "breaking" }],
     ["number without decreased", { rule: "number", increased: "breaking" }],
     [
@@ -338,6 +347,10 @@ describe("the rules number and optional", () => {
     [
       "number with an unknown class",
       { rule: "number", increased: "breaking", decreased: "minor" },
+    ],
+    [
+      "number with an unknown increased class",
+      { rule: "number", increased: "Breaking", decreased: "compatible" },
     ],
   ])("refuses %s", (_title, rule) => {
     expect(isTable(table(rule))).toBe(false);
