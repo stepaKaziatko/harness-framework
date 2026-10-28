@@ -3,11 +3,7 @@
 // requires (ADR 0006). The tables of kinds and extensions are passed in; the
 // engine knows no concrete kind.
 
-import {
-  isTable,
-  type ChangeClass,
-  type ChangeTable,
-} from "../core/changes.js";
+import { isTable, type ChangeTable } from "../core/changes.js";
 import type { Diagnostic, DiagnosticPath } from "../core/diagnostics.js";
 import {
   NotJsonError,
@@ -25,11 +21,17 @@ import { describeError } from "../core/state.js";
 import { requiredBumpOf, type RequiredBump } from "./bump.js";
 import {
   comparisonDiagnosticCodes,
-  type ChangeCode,
   type ComparisonDiagnosticCode,
 } from "./codes.js";
+import {
+  walkModels,
+  type Change,
+  type SchemaComparer,
+  type Tables,
+} from "./walk.js";
 
 export type { RequiredBump } from "./bump.js";
+export type { Change } from "./walk.js";
 
 /**
  * The tables the comparison reads. A descriptor of a declaration kind and a
@@ -48,19 +50,6 @@ export interface CompareOptions {
   }[];
 }
 
-/** One change between two models. */
-export interface Change {
-  readonly code: ChangeCode;
-  /**
-   * Where the change is, from the root of the model. For an element of a set
-   * or a branch of `anyOf`/`oneOf`, the index is in the model that has it.
-   */
-  readonly path: DiagnosticPath;
-  readonly class: ChangeClass;
-  /** Human-readable explanation; not part of the contract. */
-  readonly message: string;
-}
-
 /** The outcome of {@link compareModels}. */
 export type ComparisonResult =
   | {
@@ -77,11 +66,23 @@ export type ComparisonResult =
       readonly diagnostics: readonly Diagnostic[];
     };
 
-/** The tables of kinds and extensions, by id. */
-export interface Tables {
-  readonly kinds: ReadonlyMap<string, ChangeTable>;
-  readonly extensions: ReadonlyMap<string, ChangeTable>;
-}
+/**
+ * Until the rules of JSON Schema by direction are in place, any change of a
+ * schema is unrecognized, which is breaking.
+ */
+const compareSchemas: SchemaComparer = (
+  _before,
+  _after,
+  path,
+  _direction,
+  changes,
+) =>
+  changes.add(
+    "schema.unrecognized",
+    path,
+    "breaking",
+    `${path.join(".")} changed in a way the rules do not recognize`,
+  );
 
 class Diagnostics {
   readonly items: Diagnostic[] = [];
@@ -314,7 +315,7 @@ export function compareModels(
       return failure(diagnostics);
     }
     if (diagnostics.items.length > 0) return failure(diagnostics);
-    const changes: Change[] = [];
+    const changes: Change[] = walkModels(before, after, tables, compareSchemas);
     const requiredBump = requiredBumpOf(changes);
     return Object.freeze({
       ok: !diagnostics.items.some((item) => item.severity === "error"),
