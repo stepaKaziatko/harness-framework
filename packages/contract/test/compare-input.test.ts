@@ -9,6 +9,7 @@ import {
   compareModels,
   type CompareOptions,
 } from "../src/versioning/compare.js";
+import { isTable } from "../src/core/changes.js";
 import { edited, model, type Model } from "./support/compare.js";
 import { probe } from "./support/test-kind.js";
 import { layout } from "./support/test-extension.js";
@@ -210,6 +211,59 @@ describe("models that cannot be read (C2)", () => {
   });
 });
 
+/** Shapes that R3 refuses, with the path of the field that breaks them. */
+const misshapen: [string, (m: Model) => void, (string | number)[]][] = [
+  [
+    "a contract name that is not a segment",
+    (m) => {
+      m.contract.name = "Trading Desk";
+    },
+    ["contract", "name"],
+  ],
+  [
+    "imports as an array",
+    (m) => {
+      m.imports = [];
+    },
+    ["imports"],
+  ],
+  [
+    "permissions as an array",
+    (m) => {
+      m.permissions = [];
+    },
+    ["permissions"],
+  ],
+  [
+    "a declaration that is not an object",
+    (m) => {
+      m.declarations["trading.orders.history"] = 1;
+    },
+    ["declarations", "trading.orders.history"],
+  ],
+];
+
+describe("the shape of a model (R3)", () => {
+  describe.each(["previous", "next"] as const)("as %s", (side) => {
+    it.each(misshapen)("refuses %s", (_title, edit, path) => {
+      const broken = edited(edit);
+      const result =
+        side === "previous"
+          ? compareModels(broken, model(), { kinds: [probe] })
+          : compareModels(model(), broken, { kinds: [probe] });
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics[0]).toEqual({
+        code: "compare.invalid-model",
+        severity: "error",
+        path: [side, ...path],
+        message: expect.any(String),
+      });
+      expect("changes" in result).toBe(false);
+      expect("requiredBump" in result).toBe(false);
+    });
+  });
+});
+
 const rogueTable = {
   fields: { a: { rule: "sometimes" } },
 } as unknown as ChangeTable;
@@ -316,6 +370,62 @@ describe("the tables of the options (C3)", () => {
         ],
       }),
     ).toMatchObject({ ok: true, diagnostics: [] });
+  });
+});
+
+/** A copy of a value with the keys of every object in reverse order. */
+function reversed(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reversed);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .reverse()
+      .map((key) => [key, reversed((value as Record<string, unknown>)[key])]),
+  );
+}
+
+describe("tables are compared by content, not by key order (R3)", () => {
+  it("accepts two equal tables written in a different key order", () => {
+    const other = reversed(probe.changes) as ChangeTable;
+    expect(JSON.stringify(other)).not.toBe(JSON.stringify(probe.changes));
+    expect(
+      compareModels(model(), model(), {
+        kinds: [probe, { kind: "probe", changes: other }],
+      }),
+    ).toEqual({ ok: true, changes: [], requiredBump: "none", diagnostics: [] });
+  });
+
+  it("refuses a table that passes the rules but is not plain JSON", () => {
+    // `every` skips holes, so the rules accept this order; the copy of the
+    // table into plain JSON refuses it.
+    // eslint-disable-next-line no-sparse-arrays
+    const order = ["low", , "high"];
+    const table = {
+      fields: {
+        level: {
+          rule: "ordered",
+          order,
+          raised: "compatible",
+          lowered: "breaking",
+        },
+      },
+    } as unknown as ChangeTable;
+    expect(isTable(table)).toBe(true);
+    expect(
+      compareModels(model(), model(), {
+        kinds: [{ kind: "probe", changes: table }],
+      }),
+    ).toEqual({
+      ok: false,
+      diagnostics: [
+        {
+          code: "compare.invalid-table",
+          severity: "error",
+          path: ["kinds", 0],
+          message: expect.any(String),
+        },
+      ],
+    });
   });
 });
 

@@ -518,3 +518,186 @@ describe("the known gap of the closed set of rules, pinned (C11)", () => {
     });
   });
 });
+
+describe("only the version of the contract is skipped (R4)", () => {
+  const versioned = {
+    kind: "probe",
+    changes: {
+      fields: { ...probe.changes.fields, version: { rule: "breaking" } },
+    } as ChangeTable,
+  };
+  const meta = {
+    id: "meta",
+    changes: { fields: { version: { rule: "compatible" } } } as ChangeTable,
+  };
+
+  it("compares a version field in the spec of a declaration", () => {
+    expect(
+      changesOf(
+        compareModels(
+          edited((m) => {
+            m.declarations["trading.orders.history"].spec.version = 1;
+          }),
+          edited((m) => {
+            m.declarations["trading.orders.history"].spec.version = 2;
+          }),
+          { kinds: [versioned] },
+        ),
+      ),
+    ).toEqual([
+      {
+        code: "value.changed",
+        path: [...HISTORY, "version"],
+        class: "breaking",
+      },
+    ]);
+  });
+
+  it("compares a version field in an extension section", () => {
+    const section = (version: number) =>
+      edited((m) => {
+        m.extensions = { meta: { version } };
+      });
+    expect(
+      changesOf(compareModels(section(1), section(2), { extensions: [meta] })),
+    ).toEqual([
+      {
+        code: "value.changed",
+        path: ["extensions", "meta", "version"],
+        class: "compatible",
+      },
+    ]);
+  });
+});
+
+describe("keys named like Object.prototype members are plain keys (R4)", () => {
+  it.each(["constructor", "toString"])(
+    "a spec field %s without a rule is unclassified",
+    (key) => {
+      expect(
+        changes((m) => {
+          m.declarations["trading.orders.history"].spec[key] = "x";
+        }),
+      ).toEqual([
+        {
+          code: "value.unclassified",
+          path: [...HISTORY, key],
+          class: "breaking",
+        },
+      ]);
+    },
+  );
+
+  const declaration = {
+    kind: "probe",
+    requires: [],
+    spec: { level: "low", refs: [], tags: [] },
+    stability: "internal",
+  };
+
+  it.each(["constructor", "toString"])(
+    "a declaration named %s is added and removed",
+    (name) => {
+      const withIt = edited((m) => {
+        m.declarations[name] = declaration;
+      });
+      expect(changesOf(compareModels(model(), withIt))).toEqual([
+        {
+          code: "entry.added",
+          path: ["declarations", name],
+          class: "compatible",
+        },
+      ]);
+      expect(changesOf(compareModels(withIt, model()))).toEqual([
+        {
+          code: "entry.removed",
+          path: ["declarations", name],
+          class: "breaking",
+        },
+      ]);
+    },
+  );
+
+  it.each(["constructor", "toString"])(
+    "a schema property named %s is added",
+    (name) => {
+      expect(
+        changes((m) => {
+          m.declarations["trading.orders.place"].spec.input.properties[name] = {
+            type: "string",
+          };
+        }),
+      ).toEqual([
+        {
+          code: "schema.property-added",
+          path: [...PLACE, "input", "properties", name],
+          class: "compatible",
+        },
+      ]);
+    },
+  );
+});
+
+describe("a missing dictionary is an empty one (R4)", () => {
+  const panel = {
+    source: "trading.quotes.feed",
+    sourceStability: "public",
+    stability: "public",
+  };
+  const without = () =>
+    edited((m) => {
+      m.extensions = { layout: {} };
+    });
+  const withPanel = () =>
+    edited((m) => {
+      m.extensions = { layout: { panels: { a: panel } } };
+    });
+  const options = { extensions: [layout] };
+
+  it("gives entry.added when the dictionary appears", () => {
+    expect(changesOf(compareModels(without(), withPanel(), options))).toEqual([
+      {
+        code: "entry.added",
+        path: ["extensions", "layout", "panels", "a"],
+        class: "compatible",
+      },
+    ]);
+  });
+
+  it("gives entry.removed when the dictionary disappears", () => {
+    expect(changesOf(compareModels(withPanel(), without(), options))).toEqual([
+      {
+        code: "entry.removed",
+        path: ["extensions", "layout", "panels", "a"],
+        class: "breaking",
+      },
+    ]);
+  });
+});
+
+describe("an unchanged extension section needs no table (R4)", () => {
+  it("compares only the changed section", () => {
+    const sections = (panels: Record<string, unknown>) =>
+      edited((m) => {
+        m.extensions = { layout: { panels }, other: { anything: [1, 2] } };
+      });
+    const panel = {
+      source: "trading.quotes.feed",
+      sourceStability: "public",
+      stability: "public",
+    };
+    expect(
+      changesOf(
+        compareModels(sections({ a: panel }), sections({}), {
+          extensions: [layout],
+        }),
+      ),
+    ).toEqual([
+      {
+        code: "entry.removed",
+        path: ["extensions", "layout", "panels", "a"],
+        class: "breaking",
+      },
+    ]);
+  });
+});
