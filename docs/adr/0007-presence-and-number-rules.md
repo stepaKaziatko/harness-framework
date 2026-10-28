@@ -22,8 +22,8 @@ would disable other people's plugins.
 
 The review of the comparison of versions also found two false compatible
 results in the comparison of schemas, which break the promise of ADR 0006,
-and the testing found that an own key `__proto__` of a model was lost
-silently. `ComparisonResult` did not narrow by `ok`.
+the testing of this decision found a third one, and the testing of the
+comparison found that an own key `__proto__` of a model was lost silently. `ComparisonResult` did not narrow by `ok`.
 
 All of this is cheap to change only before the first release, 0.1.0. The
 decision was designed and approved in task HAF-25 (Cadence Lab, project HAF);
@@ -115,7 +115,7 @@ owner no longer limits the calls.
 The other rows of both tables do not change: the other fields of `spec` are
 always written.
 
-### Schemas: two false compatible results fixed
+### Schemas: three false compatible results fixed
 
 - **A property removed from `properties` and added to `required`.** Input
   `{ properties: { a: {…} }, required: [] }` to `{ properties: {},
@@ -133,6 +133,13 @@ required: ["a"] }` gave only `schema.property-removed`, compatible in an
   output a previous `{ type: "string", minLength: 1 }` against a new
   `b: { type: "string" }` gives `schema.widened`, breaking. A previous
   `additionalProperties` that is open or `false` adds nothing.
+- **A name required without a declaration, declared as optional.** Output
+  `{ properties: {}, required: ["a"] }` to `{ properties: { a: {…} },
+required: [] }` gave only `schema.property-added`, compatible, although the
+  field the previous schema guaranteed may now be absent. It now also gives
+  `schema.required-removed` at the same path, after the addition: output
+  breaking, input compatible (the value is no longer demanded). zod does not
+  produce such schemas; a hand-written one does.
 - One false breaking result is left: a new property whose schema is `true`
   against a previous object `additionalProperties` schema is
   `schema.unrecognized`.
@@ -207,8 +214,10 @@ changed.
 - The reading table gains the rows of `number` and `optional`; the catalog
   has 23 change codes.
 - In "Schemas by direction", a removed property also gives
-  `schema.required-added` when it became required, and a new property is
-  compared with the previous `additionalProperties` schema. The promise is
+  `schema.required-added` when it became required, a new optional property
+  also gives `schema.required-removed` when its name was required before,
+  and a new property is compared with the previous `additionalProperties`
+  schema. The promise is
   the one stated above, with the exception of an open input object.
 - `ComparisonResult` has a literal `ok`.
 - The section "Known limitations" is closed: presence and numbers with a
@@ -225,8 +234,8 @@ changed.
 - A kind or an extension that has fields which may be absent wraps their
   rules in `optional` instead of accepting `value.unclassified`.
 - Comparisons that were minor become major where a schema got a new required
-  value or a narrower property under `additionalProperties`; such results
-  were wrong before.
+  value or a narrower property under `additionalProperties`, or an output no
+  longer guarantees a field it required; such results were wrong before.
 - A model or an input with an own key `__proto__` is refused instead of being
   changed silently.
 - Changes to anything in this record are changes to the contract and go

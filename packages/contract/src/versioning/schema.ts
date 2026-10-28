@@ -303,6 +303,8 @@ class SchemaWalk {
             "compatible",
             `${show(at)} was added as an optional property`,
           );
+          // A name required without a declaration is now optional.
+          if (wasRequired.has(name)) this.requiredRemoved(at);
         }
         // Values of the property were accepted by the previous
         // additionalProperties schema: compare that schema with the new one.
@@ -314,12 +316,7 @@ class SchemaWalk {
       if (isRequired.has(name) && !wasRequired.has(name)) {
         this.requiredAdded(at);
       } else if (wasRequired.has(name) && !isRequired.has(name)) {
-        this.add(
-          "schema.required-removed",
-          at,
-          this.direction === "input" ? "compatible" : "breaking",
-          `${show(at)} is no longer required`,
-        );
+        this.requiredRemoved(at);
       }
       if (inA && inB) {
         this.subschema(propertiesA[name], propertiesB[name], at);
@@ -333,6 +330,15 @@ class SchemaWalk {
       path,
       this.direction === "input" ? "breaking" : "compatible",
       `${show(path)} is required`,
+    );
+  }
+
+  requiredRemoved(path: Path): void {
+    this.add(
+      "schema.required-removed",
+      path,
+      this.direction === "input" ? "compatible" : "breaking",
+      `${show(path)} is no longer required`,
     );
   }
 

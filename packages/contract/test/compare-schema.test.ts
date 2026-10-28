@@ -832,6 +832,31 @@ describe("properties, required and additionalProperties together", () => {
     });
   });
 
+  describe("a name required without a declaration, declared as optional", () => {
+    const before = { type: "object", properties: {}, required: ["a"] };
+    const after = {
+      type: "object",
+      properties: { a: { type: "number" } },
+      required: [],
+    };
+
+    it("is breaking in output: the guaranteed field may be absent", () => {
+      expectSchema("output", before, after, [
+        ["schema.property-added", ["properties", "a"], "compatible"],
+        ["schema.required-removed", ["properties", "a"], "breaking"],
+      ]);
+      expect(schemaBump("output", before, after)).toBe("major");
+    });
+
+    it("is compatible in input: the value is no longer demanded", () => {
+      expectSchema("input", before, after, [
+        ["schema.property-added", ["properties", "a"], "compatible"],
+        ["schema.required-removed", ["properties", "a"], "compatible"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("minor");
+    });
+  });
+
   describe("a new property under a previous additionalProperties schema", () => {
     it("is compared with that schema in input", () => {
       const before = {
