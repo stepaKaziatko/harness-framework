@@ -13,9 +13,11 @@ const ENTRY_VALUES = [
   "defineDeclarationKind",
   "defineExtension",
   "defineIntent",
+  "defineSource",
   "diagnosticCodes",
   "intentKind",
   "normalize",
+  "sourceKind",
 ];
 
 const manifest = JSON.parse(

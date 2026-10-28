@@ -78,3 +78,13 @@ export type {
   IntentLimits,
   IntentSpec,
 } from "./kinds/intent/index.js";
+
+// Declaration kind: source (ADR 0004).
+export { defineSource, sourceKind } from "./kinds/source/index.js";
+export type {
+  Source,
+  SourceDiagnosticCode,
+  SourceInput,
+  SourceSpec,
+  SourceSubscription,
+} from "./kinds/source/index.js";
