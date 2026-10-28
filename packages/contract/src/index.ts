@@ -70,6 +70,15 @@ export type {
   Subject,
 } from "./core/root.js";
 
+// Declaration kind: intent (ADR 0005)
+export { defineIntent, intentKind } from "./kinds/intent/index.js";
+export type {
+  ConfirmationPolicy,
+  IntentInput,
+  IntentLimits,
+  IntentSpec,
+} from "./kinds/intent/index.js";
+
 // Declaration kind: source (ADR 0004).
 export { defineSource, sourceKind } from "./kinds/source/index.js";
 export type {

@@ -12,8 +12,10 @@ const ENTRY_VALUES = [
   "defineContract",
   "defineDeclarationKind",
   "defineExtension",
+  "defineIntent",
   "defineSource",
   "diagnosticCodes",
+  "intentKind",
   "normalize",
   "sourceKind",
 ];
@@ -48,7 +50,7 @@ describe("@paddockjs/contract", () => {
     expect(keys.filter((key) => !ALLOWED_EXPORTS.has(key))).toEqual([]);
   });
 
-  it("exports exactly the core values (P3)", async () => {
+  it("exports exactly the core and kind values (P3)", async () => {
     const entry = (await import("../src/index.js")) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(ENTRY_VALUES);
     expect(entry.MODEL_FORMAT_VERSION).toBe(1);
@@ -70,7 +72,7 @@ describe("@paddockjs/contract", () => {
     expect(new Set(zodImports)).toEqual(new Set(["zod/v4/core"]));
   });
 
-  it("holds the core, the kinds, versioning and the entry point, and the core knows no kind (T14)", () => {
+  it("holds only the entry point, the core, kinds and versioning; the core names no concrete kind (T14)", () => {
     const files = sourceFiles().map((file) =>
       relative(sourceRoot, file).split("\\").join("/"),
     );
@@ -78,7 +80,9 @@ describe("@paddockjs/contract", () => {
       files.filter(
         (file) =>
           file !== "index.ts" &&
-          !/^(core\/|kinds\/[^/]+\/|versioning\/)/.test(file),
+          !file.startsWith("core/") &&
+          !/^kinds\/[a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*\//.test(file) &&
+          !file.startsWith("versioning/"),
       ),
     ).toEqual([]);
     const mentions = sourceFiles(join(sourceRoot, "core")).filter((file) =>
