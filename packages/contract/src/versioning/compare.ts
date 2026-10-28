@@ -19,16 +19,12 @@ import { isSegment } from "../core/names.js";
 import { isContractVersion } from "../core/semver.js";
 import { describeError } from "../core/state.js";
 import { requiredBumpOf, type RequiredBump } from "./bump.js";
+import { compareSchemas } from "./schema.js";
 import {
   comparisonDiagnosticCodes,
   type ComparisonDiagnosticCode,
 } from "./codes.js";
-import {
-  walkModels,
-  type Change,
-  type SchemaComparer,
-  type Tables,
-} from "./walk.js";
+import { walkModels, type Change, type Tables } from "./walk.js";
 
 export type { RequiredBump } from "./bump.js";
 export type { Change } from "./walk.js";
@@ -65,24 +61,6 @@ export type ComparisonResult =
       readonly ok: false;
       readonly diagnostics: readonly Diagnostic[];
     };
-
-/**
- * Until the rules of JSON Schema by direction are in place, any change of a
- * schema is unrecognized, which is breaking.
- */
-const compareSchemas: SchemaComparer = (
-  _before,
-  _after,
-  path,
-  _direction,
-  changes,
-) =>
-  changes.add(
-    "schema.unrecognized",
-    path,
-    "breaking",
-    `${path.join(".")} changed in a way the rules do not recognize`,
-  );
 
 class Diagnostics {
   readonly items: Diagnostic[] = [];
