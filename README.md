@@ -39,9 +39,13 @@ application ([harness-pilot](https://github.com/stepaKaziatko/harness-pilot)).
 ## Development
 
 Verification runs on the developer's machine, not on a hosted CI: `pnpm verify`
-runs typecheck, build, lint and tests, and its result is attached to the commit
-as the `local/verify` status. Pull requests into `main` require that status.
-Run `node scripts/local-verify.mjs` on a clean, pushed commit to do both.
+runs typecheck, build, lint and tests, and `pnpm verify:publish` packs every
+package, installs the tarballs into a temporary project outside the repository
+and checks that each one imports from `dist`, type-checks on `nodenext`
+resolution and refuses deep imports past its `exports`. The result of both is
+attached to the commit as the `local/verify` status. Pull requests into `main`
+require that status. Run `node scripts/local-verify.mjs` on a clean, pushed
+commit to do both.
 
 ## License
 
