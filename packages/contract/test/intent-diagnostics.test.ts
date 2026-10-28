@@ -2,11 +2,12 @@ import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
   defineContract,
+  defineIntent,
   diagnosticCodes,
+  intentKind,
   normalize,
   type Diagnostic,
 } from "../src/index.js";
-import { defineIntent, intentKind } from "../src/kinds/intent/index.js";
 import { defineSourceStub } from "./support/source-stub.js";
 
 /** Index of the intent under test in `declarations` of {@link rootWith}. */

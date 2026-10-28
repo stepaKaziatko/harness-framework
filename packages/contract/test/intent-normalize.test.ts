@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
-import { defineContract, normalize, type ContractModel } from "../src/index.js";
-import { defineIntent } from "../src/kinds/intent/index.js";
+import {
+  defineContract,
+  defineIntent,
+  normalize,
+  type ContractModel,
+} from "../src/index.js";
 import { defineSourceStub } from "./support/source-stub.js";
 
 const placeOrderParams = z.object({

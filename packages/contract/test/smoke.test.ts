@@ -12,7 +12,9 @@ const ENTRY_VALUES = [
   "defineContract",
   "defineDeclarationKind",
   "defineExtension",
+  "defineIntent",
   "diagnosticCodes",
+  "intentKind",
   "normalize",
 ];
 
@@ -46,7 +48,7 @@ describe("@paddockjs/contract", () => {
     expect(keys.filter((key) => !ALLOWED_EXPORTS.has(key))).toEqual([]);
   });
 
-  it("exports exactly the core values (P3)", async () => {
+  it("exports exactly the core and kind values (P3)", async () => {
     const entry = (await import("../src/index.js")) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(ENTRY_VALUES);
     expect(entry.MODEL_FORMAT_VERSION).toBe(1);

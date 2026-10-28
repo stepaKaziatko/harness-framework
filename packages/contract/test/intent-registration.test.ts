@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
-import { defineContract, diagnosticCodes, normalize } from "../src/index.js";
-import { defineIntent, intentKind } from "../src/kinds/intent/index.js";
+import {
+  defineContract,
+  defineIntent,
+  diagnosticCodes,
+  intentKind,
+  normalize,
+} from "../src/index.js";
 import { isTable } from "../src/core/changes.js";
 import { defineSourceStub } from "./support/source-stub.js";
 

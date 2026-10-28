@@ -10,7 +10,7 @@ import {
   type IntentInput,
   type IntentLimits,
   type IntentSpec,
-} from "../src/kinds/intent/index.js";
+} from "../src/index.js";
 
 const params = z.object({ symbol: z.string(), quantity: z.number() });
 const result = z.object({ id: z.number() });
