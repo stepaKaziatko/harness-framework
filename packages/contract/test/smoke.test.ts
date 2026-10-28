@@ -8,6 +8,9 @@ const ALLOWED_EXPORTS = new Set([".", "./package.json"]);
 /** The runtime values of the root entry point: an allowlist. */
 const ENTRY_VALUES = [
   "MODEL_FORMAT_VERSION",
+  "changeCodes",
+  "compareModels",
+  "comparisonDiagnosticCodes",
   "coreChangeTable",
   "defineContract",
   "defineDeclarationKind",
@@ -54,6 +57,7 @@ describe("@paddockjs/contract", () => {
     const entry = (await import("../src/index.js")) as Record<string, unknown>;
     expect(Object.keys(entry).sort()).toEqual(ENTRY_VALUES);
     expect(entry.MODEL_FORMAT_VERSION).toBe(1);
+    expect(entry).not.toHaveProperty("compareVersions");
   });
 
   it("depends on zod as a peer only (P1)", () => {

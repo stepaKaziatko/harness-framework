@@ -88,3 +88,17 @@ export type {
   SourceSpec,
   SourceSubscription,
 } from "./kinds/source/index.js";
+
+// Version comparison (ADR 0006).
+export { changeCodes, comparisonDiagnosticCodes } from "./versioning/codes.js";
+export type {
+  ChangeCode,
+  ComparisonDiagnosticCode,
+} from "./versioning/codes.js";
+export { compareModels } from "./versioning/compare.js";
+export type {
+  Change,
+  CompareOptions,
+  ComparisonResult,
+  RequiredBump,
+} from "./versioning/compare.js";

@@ -574,7 +574,7 @@ describe("the change table and the registration (C1 to C3)", () => {
     const feed = model.declarations["trading.quotes.feed"]
       ?.spec as unknown as SourceSpec;
     const rule = fields.subscription;
-    if (rule?.rule !== "nested" || rule.table === "kind") {
+    if (rule?.rule !== "nested" || typeof rule.table !== "object") {
       throw new Error("subscription must be a nested rule");
     }
     for (const key of Object.keys(feed.subscription ?? {})) {

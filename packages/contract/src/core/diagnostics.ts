@@ -43,6 +43,7 @@ export const RESERVED_CODE_AREAS = Object.freeze([
   "declaration",
   "descriptor",
   "schema",
+  "compare",
 ] as const);
 
 const error = (summary: string): DiagnosticCodeInfo =>
@@ -70,6 +71,9 @@ export const diagnosticCodes = Object.freeze({
   ),
   "import.invalid-range": error(
     "The version range of an import is outside the range grammar.",
+  ),
+  "import.empty-range": error(
+    "An alternative `>=A <B` of an import range has `B` not greater than `A`, so it matches no version.",
   ),
   "import.self": error("The contract imports itself."),
   "import.duplicate": error("The same contract is imported more than once."),
