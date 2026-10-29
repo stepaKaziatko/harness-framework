@@ -26,6 +26,7 @@ export interface ProbeInput extends DeclarationEnvelope {
   readonly level?: "low" | "high";
   readonly options?: { readonly retries?: number; readonly note?: string };
   readonly note?: string;
+  readonly count?: number;
   /** Makes the kind report its own warning. */
   readonly unusual?: boolean;
 }
@@ -51,6 +52,12 @@ export const probeChanges: ChangeTable = {
           note: { rule: "compatible" },
         },
       },
+    },
+    count: {
+      rule: "optional",
+      added: "compatible",
+      removed: "breaking",
+      value: { rule: "number", increased: "breaking", decreased: "compatible" },
     },
   },
 };
@@ -92,6 +99,7 @@ export function normalizeProbe(
   if (declaration.options !== undefined)
     spec.options = { ...declaration.options };
   if (declaration.note !== undefined) spec.note = declaration.note;
+  if (declaration.count !== undefined) spec.count = declaration.count;
   if (declaration.unusual === true) {
     context.report("probe.unusual", ["unusual"], `${context.name} is unusual`);
   }

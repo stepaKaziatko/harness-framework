@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   defineContract,
   defineIntent,
+  defineSource,
+  type Diagnostic,
   diagnosticCodes,
   intentKind,
   normalize,
-  type Diagnostic,
 } from "../src/index.js";
-import { defineSourceStub } from "./support/source-stub.js";
+
+/** A source of the contract: an intent sees only its name and kind. */
+const sourceNamed = (name: string) =>
+  defineSource({ name, result: z.object({}) });
 
 /** Index of the intent under test in `declarations` of {@link rootWith}. */
 const INTENT = 2;
@@ -23,8 +27,8 @@ function rootWith(
     version: "0.1.0",
     permissions: { "orders.place": {} },
     declarations: [
-      defineSourceStub({ name: "balance.get" }),
-      defineSourceStub({ name: "operations.list" }),
+      sourceNamed("balance.get"),
+      sourceNamed("operations.list"),
       defineIntent(intent as never),
     ],
     ...extra,
@@ -74,6 +78,13 @@ function diagnose(fields: Record<string, unknown>) {
 describe("a closed set of keys (T7)", () => {
   it("refuses a handler", () => {
     expect(diagnose({ handler: () => ({}) })).toEqual([
+      ["intent.unknown-field", [...D, "handler"]],
+    ]);
+  });
+
+  it("refuses a handler whose value is undefined", () => {
+    // `undefined` counts as absent only for the fields an intent declares.
+    expect(diagnose({ handler: undefined })).toEqual([
       ["intent.unknown-field", [...D, "handler"]],
     ]);
   });
@@ -292,7 +303,7 @@ describe("invalidates (T12)", () => {
       version: "0.1.0",
       permissions: { "orders.place": {} },
       declarations: [
-        defineSourceStub({ name: "balance.get" }),
+        sourceNamed("balance.get"),
         defineIntent({ ...base, name: "orders.cancel" } as never),
         defineIntent({ ...base, invalidates: ["orders.cancel"] } as never),
       ],
@@ -318,6 +329,16 @@ describe("invalidates (T12)", () => {
     const root = rootWith(
       { ...base, invalidates: ["auth.users.get"] },
       { imports: [{ contract: "auth", range: "^1.4.0" }] },
+    );
+    expect(check(root)).toEqual([
+      ["intent.foreign-invalidates", [...D, "invalidates", 0]],
+    ]);
+  });
+
+  it("refuses a source of an import whose name starts with its own", () => {
+    const root = rootWith(
+      { ...base, invalidates: ["tradingx.quotes.feed"] },
+      { imports: [{ contract: "tradingx", range: "^1.0.0" }] },
     );
     expect(check(root)).toEqual([
       ["intent.foreign-invalidates", [...D, "invalidates", 0]],
@@ -358,7 +379,7 @@ describe("every problem in one pass (T13)", () => {
       version: "0.1.0",
       permissions: { "orders.place": {} },
       declarations: [
-        defineSourceStub({ name: "balance.get" }),
+        sourceNamed("balance.get"),
         defineIntent({ ...base, name: "a", confirmation: "always" } as never),
         defineIntent({ ...base, name: "b", limits: { perDay: 0 } } as never),
       ],

@@ -10,6 +10,8 @@ export type {
   ChangeTable,
   CompatibleRule,
   NestedRule,
+  NumberRule,
+  OptionalRule,
   OrderedRule,
   SchemaRule,
   SetRule,

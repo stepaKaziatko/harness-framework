@@ -35,13 +35,24 @@ function zodChanges(direction: Direction, before: z.ZodType, after: z.ZodType) {
   );
 }
 
-/** The changes between two hand-written schemas of one direction. */
-function schemaChanges(direction: Direction, before: Schema, after: Schema) {
+/** The comparison of two hand-written schemas of one direction. */
+function schemaResult(direction: Direction, before: Schema, after: Schema) {
   const at = (schema: Schema) =>
     edited((m) => {
       m.declarations["trading.orders.history"].spec[direction] = schema;
     });
-  return changesOf(compareModels(at(before), at(after), { kinds: [probe] }));
+  return compareModels(at(before), at(after), { kinds: [probe] });
+}
+
+/** The changes between two hand-written schemas of one direction. */
+function schemaChanges(direction: Direction, before: Schema, after: Schema) {
+  return changesOf(schemaResult(direction, before, after));
+}
+
+/** The bump required by two hand-written schemas of one direction. */
+function schemaBump(direction: Direction, before: Schema, after: Schema) {
+  const result = schemaResult(direction, before, after);
+  return "requiredBump" in result ? result.requiredBump : undefined;
 }
 
 function expectSchema(
@@ -782,6 +793,262 @@ describe("narrowing and widening (C14)", () => {
       expectSchema(direction, { [keyword]: one }, { [keyword]: two }, [
         ["schema.annotation-changed", [keyword], "compatible"],
       ]);
+    });
+  });
+});
+
+describe("properties, required and additionalProperties together", () => {
+  describe("a property removed from properties and added to required", () => {
+    const before = {
+      type: "object",
+      properties: { a: { type: "string" } },
+      required: [],
+    };
+    const after = { type: "object", properties: {}, required: ["a"] };
+
+    it("is a compatible removal and a breaking requirement in input", () => {
+      expectSchema("input", before, after, [
+        ["schema.property-removed", ["properties", "a"], "compatible"],
+        ["schema.required-added", ["properties", "a"], "breaking"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("major");
+    });
+
+    it("is a breaking removal and a compatible requirement in output", () => {
+      expectSchema("output", before, after, [
+        ["schema.property-removed", ["properties", "a"], "breaking"],
+        ["schema.required-added", ["properties", "a"], "compatible"],
+      ]);
+      expect(schemaBump("output", before, after)).toBe("major");
+    });
+
+    it("gives no requirement when the property was already required", () => {
+      expectSchema(
+        "input",
+        { type: "object", properties: { a: {} }, required: ["a"] },
+        { type: "object", required: ["a"] },
+        [["schema.property-removed", ["properties", "a"], "compatible"]],
+      );
+    });
+  });
+
+  describe("a name required without a declaration, declared as optional", () => {
+    const before = { type: "object", properties: {}, required: ["a"] };
+    const after = {
+      type: "object",
+      properties: { a: { type: "number" } },
+      required: [],
+    };
+
+    it("is breaking in output: the guaranteed field may be absent", () => {
+      expectSchema("output", before, after, [
+        ["schema.property-added", ["properties", "a"], "compatible"],
+        ["schema.required-removed", ["properties", "a"], "breaking"],
+      ]);
+      expect(schemaBump("output", before, after)).toBe("major");
+    });
+
+    it("is compatible in input: the value is no longer demanded", () => {
+      expectSchema("input", before, after, [
+        ["schema.property-added", ["properties", "a"], "compatible"],
+        ["schema.required-removed", ["properties", "a"], "compatible"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("minor");
+    });
+  });
+
+  describe("a new property under a previous additionalProperties schema", () => {
+    it("is compared with that schema in input", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "number" },
+      };
+      const after = { ...before, properties: { b: { type: "string" } } };
+      expectSchema("input", before, after, [
+        ["schema.property-added", ["properties", "b"], "compatible"],
+        ["schema.type-changed", ["properties", "b", "type"], "breaking"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("major");
+    });
+
+    it("is compared with that schema in output", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "string", minLength: 1 },
+      };
+      const after = { ...before, properties: { b: { type: "string" } } };
+      expectSchema("output", before, after, [
+        ["schema.property-added", ["properties", "b"], "compatible"],
+        ["schema.widened", ["properties", "b", "minLength"], "breaking"],
+      ]);
+      expect(schemaBump("output", before, after)).toBe("major");
+    });
+
+    it("is compared with that schema when it is required, in output", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "string", minLength: 1 },
+      };
+      const after = {
+        ...before,
+        properties: { b: { type: "string" } },
+        required: ["b"],
+      };
+      expectSchema("output", before, after, [
+        ["schema.required-added", ["properties", "b"], "compatible"],
+        ["schema.widened", ["properties", "b", "minLength"], "breaking"],
+      ]);
+      expect(schemaBump("output", before, after)).toBe("major");
+    });
+
+    it("is compared with that schema when it is required, in input", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "string" },
+      };
+      const after = {
+        ...before,
+        properties: { b: { type: "string", minLength: 1 } },
+        required: ["b"],
+      };
+      expectSchema("input", before, after, [
+        ["schema.required-added", ["properties", "b"], "breaking"],
+        ["schema.narrowed", ["properties", "b", "minLength"], "breaking"],
+      ]);
+    });
+
+    it("is compatible when its schema equals the previous one", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "number" },
+      };
+      const after = { ...before, properties: { b: { type: "number" } } };
+      expectSchema("input", before, after, [
+        ["schema.property-added", ["properties", "b"], "compatible"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("minor");
+    });
+
+    it("is compared with the previous schema, not the next one", () => {
+      expectSchema(
+        "input",
+        { type: "object", additionalProperties: { type: "number" } },
+        {
+          type: "object",
+          additionalProperties: { type: "string" },
+          properties: { b: { type: "string" } },
+        },
+        [
+          ["schema.type-changed", ["additionalProperties", "type"], "breaking"],
+          ["schema.property-added", ["properties", "b"], "compatible"],
+          ["schema.type-changed", ["properties", "b", "type"], "breaking"],
+        ],
+      );
+      expectSchema(
+        "input",
+        { type: "object", additionalProperties: false },
+        {
+          type: "object",
+          additionalProperties: { type: "number" },
+          properties: { b: { type: "string" } },
+        },
+        [
+          ["schema.unrecognized", ["additionalProperties"], "breaking"],
+          ["schema.property-added", ["properties", "b"], "compatible"],
+        ],
+      );
+    });
+
+    it("whose schema is true is unrecognized, a false breaking", () => {
+      const before = {
+        type: "object",
+        additionalProperties: { type: "number" },
+      };
+      expectSchema("input", before, { ...before, properties: { b: true } }, [
+        ["schema.property-added", ["properties", "b"], "compatible"],
+        ["schema.unrecognized", ["properties", "b"], "breaking"],
+      ]);
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+      ["absent", {}],
+      ["true", { additionalProperties: true }],
+      ["{}", { additionalProperties: {} }],
+      ["false", { additionalProperties: false }],
+    ])(
+      "is only added when the previous additionalProperties is %s",
+      (_title, additional) => {
+        for (const direction of ["input", "output"] as const) {
+          for (const required of [false, true]) {
+            const before = { type: "object", ...additional };
+            const after = {
+              ...before,
+              properties: { b: { type: "string" } },
+              ...(required ? { required: ["b"] } : {}),
+            };
+            const code = required
+              ? "schema.required-added"
+              : "schema.property-added";
+            const cls =
+              required && direction === "input" ? "breaking" : "compatible";
+            expectSchema(direction, before, after, [
+              [code, ["properties", "b"], cls],
+            ]);
+          }
+        }
+      },
+    );
+  });
+
+  describe("the assumptions about removed and added properties", () => {
+    const object = { type: "object", properties: { x: {} } };
+
+    it("a removal goes by the next additionalProperties: open to false", () => {
+      expectSchema(
+        "input",
+        object,
+        { type: "object", additionalProperties: false },
+        [
+          ["schema.narrowed", ["additionalProperties"], "breaking"],
+          ["schema.property-removed", ["properties", "x"], "breaking"],
+        ],
+      );
+    });
+
+    it("a removal goes by the next additionalProperties: false to open", () => {
+      expectSchema(
+        "input",
+        { ...object, additionalProperties: false },
+        { type: "object" },
+        [
+          ["schema.widened", ["additionalProperties"], "compatible"],
+          ["schema.property-removed", ["properties", "x"], "compatible"],
+        ],
+      );
+    });
+
+    it("a removal goes by the next additionalProperties: open to a schema", () => {
+      expectSchema(
+        "input",
+        object,
+        { type: "object", additionalProperties: { type: "string" } },
+        [
+          ["schema.unrecognized", ["additionalProperties"], "breaking"],
+          ["schema.property-removed", ["properties", "x"], "breaking"],
+        ],
+      );
+    });
+
+    it("a constrained optional property added to an open input object is compatible", () => {
+      const before = { type: "object" };
+      const after = {
+        type: "object",
+        properties: { b: { type: "string", minLength: 3 } },
+      };
+      expectSchema("input", before, after, [
+        ["schema.property-added", ["properties", "b"], "compatible"],
+      ]);
+      expect(schemaBump("input", before, after)).toBe("minor");
     });
   });
 });

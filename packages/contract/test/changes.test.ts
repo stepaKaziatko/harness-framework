@@ -4,8 +4,14 @@ import {
   defineContract,
   defineDeclarationKind,
   normalize,
+  type ChangeRule,
+  type ChangeTable,
+  type NumberRule,
+  type OptionalRule,
 } from "../src/index.js";
 import { isTable } from "../src/core/changes.js";
+import { compareModels } from "../src/versioning/compare.js";
+import { model } from "./support/compare.js";
 import { probeChanges, defineProbe } from "./support/test-kind.js";
 
 describe("coreChangeTable (T15)", () => {
@@ -80,21 +86,25 @@ describe("coreChangeTable (T15)", () => {
 
   it("lets the test kind use every rule of the closed set and accepts it", () => {
     const rules = new Set<string>();
-    const walk = (table: typeof probeChanges): void => {
-      for (const rule of Object.values(table.fields)) {
-        rules.add(
-          rule.rule === "schema" ? `schema:${rule.direction}` : rule.rule,
-        );
-        if (rule.rule === "nested" && typeof rule.table === "object") {
-          walk(rule.table);
-        }
+    const visit = (rule: ChangeRule): void => {
+      rules.add(
+        rule.rule === "schema" ? `schema:${rule.direction}` : rule.rule,
+      );
+      if (rule.rule === "nested" && typeof rule.table === "object") {
+        walk(rule.table);
       }
+      if (rule.rule === "optional") visit(rule.value);
+    };
+    const walk = (table: ChangeTable): void => {
+      for (const rule of Object.values(table.fields)) visit(rule);
     };
     walk(probeChanges);
     expect([...rules].sort()).toEqual([
       "breaking",
       "compatible",
       "nested",
+      "number",
+      "optional",
       "ordered",
       "schema:input",
       "schema:output",
@@ -217,5 +227,184 @@ describe("the closed set of rules", () => {
         fields: { a: { rule: "schema", direction: "output" } },
       }),
     ).toBe(true);
+  });
+});
+
+describe("the rules number and optional", () => {
+  const number: NumberRule = {
+    rule: "number",
+    increased: "breaking",
+    decreased: "compatible",
+  };
+  const optional = (value: unknown): unknown => ({
+    rule: "optional",
+    added: "compatible",
+    removed: "breaking",
+    value,
+  });
+  const table = (rule: unknown): unknown => ({ fields: { a: rule } });
+
+  it("are exported as types from the entry point", () => {
+    const rule: OptionalRule = {
+      rule: "optional",
+      added: "compatible",
+      removed: "breaking",
+      value: number,
+    };
+    expect(isTable(table(rule))).toBe(true);
+  });
+
+  it.each<[string, unknown]>([
+    ["a number", number],
+    [
+      "an ordered value",
+      {
+        rule: "ordered",
+        order: ["low", "high"],
+        raised: "compatible",
+        lowered: "breaking",
+      },
+    ],
+    ["a schema", { rule: "schema", direction: "input" }],
+    [
+      "an object of a nested table",
+      { rule: "nested", table: { fields: { b: number } } },
+    ],
+  ])("optional accepts %s as its value", (_title, value) => {
+    expect(isTable(table(optional(value)))).toBe(true);
+  });
+
+  it.each<[string, unknown]>([
+    ["breaking", { rule: "breaking" }],
+    ["compatible", { rule: "compatible" }],
+    ["a set", { rule: "set", added: "compatible", removed: "breaking" }],
+    [
+      "a dictionary",
+      {
+        rule: "nested",
+        table: {
+          entry: { added: "compatible", removed: "breaking" },
+          fields: {},
+        },
+      },
+    ],
+    ["the core-only kind table", { rule: "nested", table: "kind" }],
+    ["the core-only extension table", { rule: "nested", table: "extension" }],
+    ["another optional", optional(number)],
+    ["an invalid number", { rule: "number", increased: "breaking" }],
+    ["a value that is not a rule", "number"],
+  ])("optional refuses %s as its value", (_title, value) => {
+    expect(isTable(table(optional(value)))).toBe(false);
+  });
+
+  it.each<[string, unknown]>([
+    [
+      "optional without added",
+      { rule: "optional", removed: "breaking", value: number },
+    ],
+    [
+      "optional without removed",
+      { rule: "optional", added: "compatible", value: number },
+    ],
+    [
+      "optional without value",
+      { rule: "optional", added: "compatible", removed: "breaking" },
+    ],
+    [
+      "optional with an extra key",
+      {
+        rule: "optional",
+        added: "compatible",
+        removed: "breaking",
+        value: number,
+        default: 1,
+      },
+    ],
+    [
+      "optional with an unknown class",
+      {
+        rule: "optional",
+        added: "minor",
+        removed: "breaking",
+        value: number,
+      },
+    ],
+    [
+      "optional with an unknown removed class",
+      {
+        rule: "optional",
+        added: "compatible",
+        removed: "Breaking",
+        value: number,
+      },
+    ],
+    ["number without increased", { rule: "number", decreased: "breaking" }],
+    ["number without decreased", { rule: "number", increased: "breaking" }],
+    [
+      "number with an extra key",
+      { rule: "number", increased: "breaking", decreased: "compatible", by: 1 },
+    ],
+    [
+      "number with an unknown class",
+      { rule: "number", increased: "breaking", decreased: "minor" },
+    ],
+    [
+      "number with an unknown increased class",
+      { rule: "number", increased: "Breaking", decreased: "compatible" },
+    ],
+  ])("refuses %s", (_title, rule) => {
+    expect(isTable(table(rule))).toBe(false);
+  });
+
+  describe("a table with optional around a set is refused", () => {
+    const rogue = table(
+      optional({ rule: "set", added: "compatible", removed: "breaking" }),
+    ) as ChangeTable;
+
+    it("by compareModels", () => {
+      expect(
+        compareModels(model(), model(), {
+          kinds: [{ kind: "probe", changes: rogue }],
+        }),
+      ).toEqual({
+        ok: false,
+        diagnostics: [
+          {
+            code: "compare.invalid-table",
+            severity: "error",
+            path: ["kinds", 0],
+            message: expect.any(String),
+          },
+        ],
+      });
+    });
+
+    it("by normalize", () => {
+      const kind = defineDeclarationKind({
+        kind: "rogue",
+        normalize: () => ({}),
+        changes: rogue,
+        diagnostics: {},
+      });
+      expect(
+        normalize(
+          defineContract({
+            name: "t",
+            version: "1.0.0",
+            declarations: [kind.declare({ name: "a" })],
+          }),
+        ),
+      ).toEqual({
+        ok: false,
+        diagnostics: [
+          {
+            code: "descriptor.invalid-changes",
+            severity: "error",
+            path: ["declarations", 0],
+            message: expect.any(String),
+          },
+        ],
+      });
+    });
   });
 });

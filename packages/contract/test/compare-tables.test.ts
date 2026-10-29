@@ -182,6 +182,172 @@ describe("the rules of a kind's table, on the probe kind (C8)", () => {
   });
 });
 
+type Rule = Record<string, unknown>;
+const ABSENT = Symbol("absent");
+/** A value of the field, or {@link ABSENT} for a missing key. */
+type Value = unknown;
+
+/**
+ * The changes of the field `f` of the spec of `trading.orders.history`
+ * between two values, compared by a probe table that has only that field.
+ */
+function fieldChanges(rule: Rule, before: Value, after: Value) {
+  const at = (value: Value) =>
+    edited((m) => {
+      if (value !== ABSENT)
+        m.declarations["trading.orders.history"].spec.f = value;
+    });
+  const table = { fields: { f: rule } } as unknown as ChangeTable;
+  return changesOf(
+    compareModels(at(before), at(after), {
+      kinds: [{ kind: "probe", changes: table }],
+    }),
+  );
+}
+
+const F = [...HISTORY, "f"];
+const number = (increased: string, decreased: string): Rule => ({
+  rule: "number",
+  increased,
+  decreased,
+});
+const optional = (added: string, removed: string, value: Rule): Rule => ({
+  rule: "optional",
+  added,
+  removed,
+  value,
+});
+
+describe("the rule number", () => {
+  it.each([
+    ["breaking", "compatible"],
+    ["compatible", "breaking"],
+  ])(
+    "classifies growth as %s and shrinking as %s by its table",
+    (increased, decreased) => {
+      const rule = number(increased, decreased);
+      expect(fieldChanges(rule, 1000, 5000)).toEqual([
+        { code: "number.increased", path: F, class: increased },
+      ]);
+      expect(fieldChanges(rule, 1000, 500)).toEqual([
+        { code: "number.decreased", path: F, class: decreased },
+      ]);
+    },
+  );
+
+  it("compares by value, not by text", () => {
+    expect(fieldChanges(number("breaking", "compatible"), 9, 10)).toEqual([
+      { code: "number.increased", path: F, class: "breaking" },
+    ]);
+  });
+
+  it.each<[string, Value, Value]>([
+    ["a string before", "1", 2],
+    ["a string after", 1, "2"],
+    ["null before", null, 2],
+    ["null after", 1, null],
+    ["the field disappeared", 1, ABSENT],
+    ["the field appeared", ABSENT, 1],
+  ])("makes %s unclassified", (_title, before, after) => {
+    expect(
+      fieldChanges(number("compatible", "compatible"), before, after),
+    ).toEqual([{ code: "value.unclassified", path: F, class: "breaking" }]);
+  });
+});
+
+describe("the rule optional", () => {
+  const inner = number("breaking", "compatible");
+
+  it.each([
+    ["compatible", "breaking"],
+    ["breaking", "compatible"],
+  ])(
+    "classifies appearing as %s and disappearing as %s by its table",
+    (added, removed) => {
+      const rule = optional(added, removed, inner);
+      expect(fieldChanges(rule, ABSENT, 1)).toEqual([
+        { code: "field.added", path: F, class: added },
+      ]);
+      expect(fieldChanges(rule, 1, ABSENT)).toEqual([
+        { code: "field.removed", path: F, class: removed },
+      ]);
+    },
+  );
+
+  it("passes two present values to its value rule, without field codes", () => {
+    const rule = optional("compatible", "breaking", inner);
+    expect(fieldChanges(rule, 1, 2)).toEqual([
+      { code: "number.increased", path: F, class: "breaking" },
+    ]);
+    expect(fieldChanges(rule, 2, 1)).toEqual([
+      { code: "number.decreased", path: F, class: "compatible" },
+    ]);
+    expect(fieldChanges(rule, 1, 1)).toEqual([]);
+  });
+
+  it.each<[string, Value, Value]>([
+    ["null to a number", null, 1],
+    ["a number to null", 1, null],
+  ])(
+    "treats null as present: %s is unclassified by the value rule",
+    (_t, a, b) => {
+      expect(
+        fieldChanges(optional("compatible", "compatible", inner), a, b),
+      ).toEqual([{ code: "value.unclassified", path: F, class: "breaking" }]);
+    },
+  );
+
+  it("goes into an object of a nested table, depth first", () => {
+    const rule = optional("compatible", "breaking", {
+      rule: "nested",
+      table: {
+        fields: {
+          x: number("breaking", "compatible"),
+          y: { rule: "compatible" },
+        },
+      },
+    });
+    expect(fieldChanges(rule, { x: 1 }, { x: 2, y: "a" })).toEqual([
+      { code: "number.increased", path: [...F, "x"], class: "breaking" },
+      { code: "value.changed", path: [...F, "y"], class: "compatible" },
+    ]);
+    expect(fieldChanges(rule, ABSENT, { x: 1 })).toEqual([
+      { code: "field.added", path: F, class: "compatible" },
+    ]);
+    expect(fieldChanges(rule, { x: 1 }, ABSENT)).toEqual([
+      { code: "field.removed", path: F, class: "breaking" },
+    ]);
+  });
+
+  it("wraps an ordered value and a schema", () => {
+    const ordered = optional("compatible", "breaking", {
+      rule: "ordered",
+      order: ["low", "high"],
+      raised: "compatible",
+      lowered: "breaking",
+    });
+    expect(fieldChanges(ordered, "high", "low")).toEqual([
+      { code: "order.lowered", path: F, class: "breaking" },
+    ]);
+    const schema = optional("compatible", "breaking", {
+      rule: "schema",
+      direction: "input",
+    });
+    expect(
+      fieldChanges(
+        schema,
+        { type: "string" },
+        { type: "string", minLength: 1 },
+      ),
+    ).toEqual([
+      { code: "schema.narrowed", path: [...F, "minLength"], class: "breaking" },
+    ]);
+    expect(fieldChanges(schema, ABSENT, { type: "string" })).toEqual([
+      { code: "field.added", path: F, class: "compatible" },
+    ]);
+  });
+});
+
 describe("missing collections and values of the wrong form (R4)", () => {
   it.each([
     [
@@ -429,12 +595,12 @@ describe("extension sections (C10)", () => {
   });
 });
 
-describe("the known gap of the closed set of rules, pinned (C11)", () => {
-  // These pins describe today's behaviour on purpose. The closed set of rules
-  // cannot say "an optional object appeared — compatible" or "a number grew —
-  // compatible" (ADR 0006, known limitations). A later task of type contract
-  // adds such rules and changes these expectations deliberately.
-  it("makes an optional object that appears or disappears unclassified", () => {
+describe("rules that need both values, not wrapped in optional (C11)", () => {
+  // An object of a nested table and a schema need both values: when one side
+  // is absent they are unclassified. A field that may be absent says so with
+  // the rule optional (ADR 0007); the table of the probe does not wrap
+  // `options` or `input`, so these stay unclassified on purpose.
+  it("makes an object that appears or disappears unclassified", () => {
     expect(
       changes((m) => {
         m.declarations["trading.orders.history"].spec.options = { retries: 1 };
@@ -475,6 +641,7 @@ describe("the known gap of the closed set of rules, pinned (C11)", () => {
     ]);
   });
 
+  // Rules proposed before ADR 0007 and not taken: still outside the set.
   it.each([
     [
       "a numeric rule",

@@ -28,6 +28,10 @@ export const changeCodes = Object.freeze({
   "set.removed": change("An element was removed from a set."),
   "order.raised": change("An ordered value moved higher in its order."),
   "order.lowered": change("An ordered value moved lower in its order."),
+  "number.increased": change("A number grew."),
+  "number.decreased": change("A number shrank."),
+  "field.added": change("A field that may be absent appeared."),
+  "field.removed": change("A field that may be absent disappeared."),
   "table.missing": change(
     "A declaration spec or an extension section changed, and the table of its kind or extension was not given.",
   ),

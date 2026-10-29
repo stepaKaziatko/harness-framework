@@ -15,7 +15,7 @@ const CODE =
   /^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*\.[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/;
 
 describe("the catalogs of version comparison (C20)", () => {
-  it("has exactly the 19 change codes", () => {
+  it("has exactly the 23 change codes", () => {
     expect(Object.keys(changeCodes)).toEqual([
       "entry.added",
       "entry.removed",
@@ -25,6 +25,10 @@ describe("the catalogs of version comparison (C20)", () => {
       "set.removed",
       "order.raised",
       "order.lowered",
+      "number.increased",
+      "number.decreased",
+      "field.added",
+      "field.removed",
       "table.missing",
       "schema.property-added",
       "schema.property-removed",
@@ -91,6 +95,7 @@ describe("the engine knows no concrete kind (R12)", () => {
 
 const ORDERS = "trading.orders.place";
 const FEED = "trading.quotes.feed";
+const HISTORY = "trading.orders.history";
 const schemaAt =
   (direction: "input" | "output", schema: unknown) => (m: Model) => {
     m.declarations["trading.orders.history"].spec[direction] = schema;
@@ -118,6 +123,18 @@ const pairs: [
     (m) => (m.declarations[ORDERS].stability = "public"),
   ],
   ["order lowered", () => {}, (m) => (m.declarations[FEED].stability = "beta")],
+  ["field added", () => {}, (m) => (m.declarations[HISTORY].spec.count = 1)],
+  ["field removed", (m) => (m.declarations[HISTORY].spec.count = 1), () => {}],
+  [
+    "number increased",
+    (m) => (m.declarations[HISTORY].spec.count = 1),
+    (m) => (m.declarations[HISTORY].spec.count = 2),
+  ],
+  [
+    "number decreased",
+    (m) => (m.declarations[HISTORY].spec.count = 2),
+    (m) => (m.declarations[HISTORY].spec.count = 1),
+  ],
   [
     "table missing",
     () => {},

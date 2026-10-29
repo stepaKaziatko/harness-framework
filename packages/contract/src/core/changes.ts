@@ -56,6 +56,24 @@ export interface NestedRule {
   readonly table: ChangeTable | "kind" | "extension";
 }
 
+/** The field is a number; the classes of its value growing and shrinking. */
+export interface NumberRule {
+  readonly rule: "number";
+  readonly increased: ChangeClass;
+  readonly decreased: ChangeClass;
+}
+
+/**
+ * The field may be absent: the classes of it appearing and disappearing, and
+ * the rule that compares two present values (ADR 0007). `value` is a rule
+ * that cannot classify an absent value itself: a number, an ordered value, a
+ * schema or an object of a nested table without `entry`.
+ */
+export interface OptionalRule extends AddRemoveClasses {
+  readonly rule: "optional";
+  readonly value: NestedRule | OrderedRule | SchemaRule | NumberRule;
+}
+
 /** One rule of the closed set. */
 export type ChangeRule =
   | BreakingRule
@@ -63,7 +81,9 @@ export type ChangeRule =
   | SchemaRule
   | SetRule
   | OrderedRule
-  | NestedRule;
+  | NestedRule
+  | NumberRule
+  | OptionalRule;
 
 /**
  * A change classification table. A field without a rule is breaking.
@@ -189,6 +209,38 @@ function isRule(value: unknown): boolean {
     }
     case "nested":
       return hasExactKeys(value, ["rule", "table"]) && isTable(value.table);
+    case "number":
+      return (
+        hasExactKeys(value, ["rule", "increased", "decreased"]) &&
+        CLASSES.has(value.increased) &&
+        CLASSES.has(value.decreased)
+      );
+    case "optional":
+      return (
+        hasExactKeys(value, ["rule", "added", "removed", "value"]) &&
+        CLASSES.has(value.added) &&
+        CLASSES.has(value.removed) &&
+        isOptionalValue(value.value)
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * True for a rule `optional` may wrap: one that cannot classify an absent
+ * value itself. `breaking`, `compatible`, `set`, a dictionary and `optional`
+ * already define absence, so wrapping them would be a second way to say it.
+ */
+function isOptionalValue(value: unknown): boolean {
+  if (!isPlainObject(value) || !isRule(value)) return false;
+  switch (value.rule) {
+    case "number":
+    case "ordered":
+    case "schema":
+      return true;
+    case "nested":
+      return !hasOwn(value.table as object, "entry");
     default:
       return false;
   }

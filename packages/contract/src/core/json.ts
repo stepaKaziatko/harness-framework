@@ -64,7 +64,9 @@ export class NotJsonError extends Error {
  * Copies a value into plain JSON with object keys inserted in code point
  * order, and `-0` written as `0`. Throws {@link NotJsonError} on anything that
  * is not plain JSON: functions, `undefined`, symbols, bigints, non-finite
- * numbers, class instances, array holes and cycles.
+ * numbers, class instances, array holes and cycles, and on an own key
+ * `__proto__`, which `JSON.parse` creates but an assignment cannot copy
+ * (ADR 0007).
  */
 export function toCanonicalJson(value: unknown): JsonValue {
   return canonical(value, [], new Set());
@@ -117,6 +119,12 @@ function canonical(
   ancestors.add(value);
   const result: Record<string, JsonValue> = {};
   for (const key of Object.keys(value).sort(compareCodePoints)) {
+    if (key === "__proto__") {
+      throw new NotJsonError("an own key __proto__ is not allowed", [
+        ...path,
+        key,
+      ]);
+    }
     result[key] = canonical(value[key], [...path, key], ancestors);
   }
   ancestors.delete(value);
@@ -161,7 +169,15 @@ function copy(
   const result: Record<string | symbol, unknown> = {};
   seen.set(value, result);
   for (const key of Object.keys(value)) {
-    result[key] = copy(value[key], symbolKeys, seen);
+    // An own key `__proto__` is defined, not assigned: an assignment would
+    // set the prototype of the copy and lose the key, and `normalize` must
+    // see the key to report it.
+    Object.defineProperty(result, key, {
+      value: copy(value[key], symbolKeys, seen),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   for (const key of symbolKeys) {
     if (hasOwn(value, key)) result[key] = value[key];

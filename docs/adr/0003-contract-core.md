@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; amended by ADR 0006
+Accepted; amended by ADR 0006, ADR 0007
 
 ## Date
 
